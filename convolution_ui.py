@@ -11,6 +11,7 @@ import numpy as np
 from matplotlib import colormaps
 from matplotlib.axes import Axes
 from matplotlib.backend_bases import MouseEvent
+from matplotlib.collections import LineCollection
 from matplotlib.colors import to_rgba
 from matplotlib.patches import FancyBboxPatch, Rectangle
 from matplotlib.widgets import Button, CheckButtons, Slider
@@ -24,6 +25,7 @@ from convolution import (
     OrientationResult,
     convolve_image_with_all_orientations,
     save_greyscale_img,
+    softmax_results,
 )
 
 
@@ -107,6 +109,31 @@ def angle_label(index: int) -> str:
     return f"{index * 180 / ORIENTATION_COUNT:g}°"
 
 
+def tangent_segments(
+    results: list[OrientationResult],
+    probabilities: np.ndarray,
+    threshold: float,
+    spacing: int,
+) -> np.ndarray:
+    """Draw centered, undirected tangents at sampled image pixels."""
+    segments = []
+    half_length = max(1.5, spacing * 0.45)
+    for item, assignments in zip(results, probabilities):
+        rows, cols = np.nonzero(assignments[::spacing, ::spacing] > threshold)
+        centers = np.column_stack((cols * spacing, rows * spacing))
+        # The kernel's vertical axis rotates in sampling coordinates. Convert
+        # that direction to image pixels, accounting for unequal grid ranges.
+        direction = np.array(
+            [
+                -np.sin(item.angle_radians) / (X_RANGE[1] - X_RANGE[0]),
+                np.cos(item.angle_radians) / (Y_RANGE[1] - Y_RANGE[0]),
+            ]
+        )
+        offset = half_length * direction / np.linalg.norm(direction)
+        segments.append(np.stack((centers - offset, centers + offset), axis=1))
+    return np.concatenate(segments) if segments else np.empty((0, 2, 2))
+
+
 @final
 class ConvolutionUI:
     def __init__(self, path: Path) -> None:
@@ -117,6 +144,8 @@ class ConvolutionUI:
             self.image = np.asarray(color.convert("L"), dtype=np.float64) / 255.0
 
         self.results: list[OrientationResult] = []
+        self.probabilities = np.empty((0, 0, 0), dtype=np.float64)
+        self.vector_segments = np.empty((0, 2, 2), dtype=np.float64)
         self.applied_params: KernelParameters | None = None
         self.selected_index: int | None = 0
         self.dirty = True
@@ -132,9 +161,13 @@ class ConvolutionUI:
             left=0.03, right=0.98, top=0.90, bottom=0.48, wspace=0.14
         )
         self.fig.suptitle(f"Oriented convolution — {self.path.name}", fontsize=16)
-        original_ax, gray_ax, self.kernel_ax, self.response_ax = axes
-        original_ax.imshow(self.original)
-        original_ax.set_title("Original color")
+        self.original_ax, gray_ax, self.kernel_ax, self.response_ax = axes
+        self.original_ax.imshow(self.original)
+        self.vector_artist = LineCollection(
+            [], colors="#00ffff", linewidths=0.6, alpha=0.85
+        )
+        self.original_ax.add_collection(self.vector_artist)
+        self.original_ax.set_title("Initial tangents on original")
         gray_ax.imshow(self.image, cmap="gray", vmin=0, vmax=1)
         gray_ax.set_title("Grayscale input")
         self.kernel_artist = self.kernel_ax.imshow(
@@ -229,6 +262,22 @@ class ConvolutionUI:
             )
             slider.on_changed(self.schedule_update)
             self.sliders[name] = slider
+
+        self.vector_threshold = Slider(
+            self.fig.add_axes((0.12, 0.405, 0.18, 0.022)),
+            "Vector threshold", 0.0, 1.0, valinit=0.2, valstep=0.01, valfmt="%.2f",
+        )
+        self.vector_threshold.on_changed(self.refresh_vectors)
+        self.softmax_temperature = Slider(
+            self.fig.add_axes((0.49, 0.405, 0.12, 0.022)),
+            "Softmax temp", 0.01, 1.0, valinit=1.0, valstep=0.01, valfmt="%.2f",
+        )
+        self.softmax_temperature.on_changed(self.refresh_assignments)
+        self.vector_spacing = Slider(
+            self.fig.add_axes((0.12, 0.132, 0.31, 0.018)),
+            "Vector spacing", 1, 16, valinit=4, valstep=1, valfmt="%d px",
+        )
+        self.vector_spacing.on_changed(self.refresh_vectors)
 
         self.checks = CheckButtons(
             self.fig.add_axes((0.05, 0.025, 0.23, 0.105)),
@@ -360,12 +409,42 @@ class ConvolutionUI:
             self.message(f"{exc} Previous previews kept; saving is disabled.", True)
             return
         self.results = results
+        self.refresh_assignments()
         self.applied_params = params
         self.dirty = False
         self.refresh_display()
         self.message(
             f"Applied {ORIENTATION_COUNT} orientations with a {params['samples']} × {params['samples']} kernel."
         )
+
+    def refresh_assignments(self, _value: float = 0.0) -> None:
+        if not self.results:
+            return
+        self.probabilities = softmax_results(
+            self.results, temperature=float(self.softmax_temperature.val)
+        )
+        self.refresh_vectors()
+
+    def refresh_vectors(self, _value: float = 0.0) -> None:
+        if not self.results:
+            return
+        threshold = float(self.vector_threshold.val)
+        spacing = int(self.vector_spacing.val)
+        self.vector_segments = tangent_segments(
+            self.results, self.probabilities, threshold, spacing
+        )
+        self.vector_artist.set_segments(self.vector_segments)
+        self.original_ax.set_title(
+            f"Initial tangents · p > {threshold:.2f}\n"
+            f"{len(self.vector_segments):,} vectors · every {spacing} px",
+            fontsize=10,
+        )
+        if not len(self.vector_segments):
+            self.original_ax.set_title(
+                f"Initial tangents · p > {threshold:.2f}\n"
+                "No vectors; lower threshold or temperature", fontsize=10,
+            )
+        self.fig.canvas.draw_idle()
 
     def display_limits(self) -> tuple[float, float]:
         if not self.results or not self.checks.get_status()[1]:
@@ -423,7 +502,24 @@ class ConvolutionUI:
     def reset(self, _event: object = None) -> None:
         for slider in self.sliders.values():
             slider.reset()
+        self.vector_threshold.reset()
+        self.softmax_temperature.reset()
+        self.vector_spacing.reset()
         self.apply()
+
+    def save_vector_overlay(self, path: Path) -> None:
+        height, width = self.image.shape
+        fig = plt.figure(figsize=(width / 100, height / 100), dpi=100)
+        ax = fig.add_axes((0, 0, 1, 1))
+        ax.imshow(self.original)
+        ax.add_collection(LineCollection(
+            self.vector_segments, colors="#00ffff", linewidths=0.6, alpha=0.85
+        ))
+        ax.axis("off")
+        try:
+            fig.savefig(path, dpi=100)
+        finally:
+            plt.close(fig)
 
     def save_contact_sheet(
         self, kind: str, path: Path, low: float, high: float, kernel_limit: float
@@ -468,6 +564,8 @@ class ConvolutionUI:
             output_dir.mkdir(parents=True)
             Image.fromarray(self.original).save(output_dir / "original.png")
             save_greyscale_img(self.image, output_dir / "grayscale.png")
+            self.save_vector_overlay(output_dir / "initial_tangents.png")
+            np.save(output_dir / "assignments.npy", self.probabilities)
             for index in indices:
                 item = self.results[index]
                 name = (
@@ -511,6 +609,17 @@ class ConvolutionUI:
                 "auto_contrast": bool(self.checks.get_status()[1]),
                 "kernel_normalization": "sum to one",
                 "image_padding": "symmetric",
+                "initial_assignments": {
+                    "normalization": "softmax across all 16 orientations at each pixel",
+                    "temperature": float(self.softmax_temperature.val),
+                    "vector_threshold": float(self.vector_threshold.val),
+                    "threshold_comparison": "strictly greater than",
+                    "vector_spacing_pixels": int(self.vector_spacing.val),
+                    "vectors_drawn": len(self.vector_segments),
+                    "overlay": "initial_tangents.png",
+                    "probabilities": "assignments.npy",
+                    "probability_axes": ["orientation", "row", "column"],
+                },
                 "raw_data": "Matching *_kernel.npy and *_response.npy files",
             }
             (output_dir / f"manifest_{suffix}.json").write_text(
