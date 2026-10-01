@@ -117,7 +117,7 @@ def tangent_segments(
 ) -> np.ndarray:
     """Draw centered, undirected tangents at sampled image pixels."""
     segments = []
-    half_length = max(1.5, spacing * 0.45)
+    half_length = max(3.0, spacing * 0.75)
     for item, assignments in zip(results, probabilities):
         rows, cols = np.nonzero(assignments[::spacing, ::spacing] > threshold)
         centers = np.column_stack((cols * spacing, rows * spacing))
@@ -164,7 +164,7 @@ class ConvolutionUI:
         self.original_ax, gray_ax, self.kernel_ax, self.response_ax = axes
         self.original_ax.imshow(self.original)
         self.vector_artist = LineCollection(
-            [], colors="#00ffff", linewidths=0.6, alpha=0.85
+            [], colors="#2563eb", linewidths=0.9, alpha=0.95
         )
         self.original_ax.add_collection(self.vector_artist)
         self.original_ax.set_title("Initial tangents on original")
@@ -270,7 +270,7 @@ class ConvolutionUI:
         self.vector_threshold.on_changed(self.refresh_vectors)
         self.softmax_temperature = Slider(
             self.fig.add_axes((0.49, 0.405, 0.12, 0.022)),
-            "Softmax temp", 0.01, 1.0, valinit=1.0, valstep=0.01, valfmt="%.2f",
+            "Softmax temp", 0.001, 0.1, valinit=0.02, valstep=0.001, valfmt="%.3f",
         )
         self.softmax_temperature.on_changed(self.refresh_assignments)
         self.vector_spacing = Slider(
@@ -440,9 +440,10 @@ class ConvolutionUI:
             fontsize=10,
         )
         if not len(self.vector_segments):
+            maximum = float(self.probabilities[:, ::spacing, ::spacing].max())
             self.original_ax.set_title(
                 f"Initial tangents · p > {threshold:.2f}\n"
-                "No vectors; lower threshold or temperature", fontsize=10,
+                f"Max p = {maximum:.3f}; lower threshold or temp", fontsize=10,
             )
         self.fig.canvas.draw_idle()
 
@@ -513,7 +514,7 @@ class ConvolutionUI:
         ax = fig.add_axes((0, 0, 1, 1))
         ax.imshow(self.original)
         ax.add_collection(LineCollection(
-            self.vector_segments, colors="#00ffff", linewidths=0.6, alpha=0.85
+            self.vector_segments, colors="#2563eb", linewidths=0.9, alpha=0.95
         ))
         ax.axis("off")
         try:

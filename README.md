@@ -22,15 +22,19 @@ the convolved image. Choose an angle from the orientation menu, or choose
 changes after a short pause. **Auto contrast** stretches the response display
 using one shared range across all 16 orientations.
 
-The original image has a cyan overlay of initial tangent estimates. Softmax
+The original image has a blue overlay of initial tangent estimates. Softmax
 normalizes the 16 raw responses at every pixel, and the overlay draws every
 orientation whose probability is strictly greater than **Vector threshold**,
 which starts at **0.20**. The overlay always considers all 16 orientations,
 regardless of the orientation menu. The threshold updates immediately without
 recomputing convolutions.
 
-**Softmax temp** starts at 1.0; lower it to make assignments more concentrated
-when no probabilities exceed the threshold. **Vector spacing** starts at 4 pixels
+**Softmax temp** starts at 0.02 and ranges from 0.001 to 0.1; lower it to make
+assignments more concentrated when no probabilities exceed the threshold. At
+temperature 1.0, the default spaghetti responses give a maximum probability of
+about 0.067, so nothing clears the 0.20 threshold. The smaller default makes
+vectors visible, but temperature remains a measurement-model tuning choice.
+**Vector spacing** starts at 4 pixels
 to keep the overlay readable. Set it to 1 to draw at every pixel. These display
 controls also update immediately. Auto contrast does not affect probabilities.
 Tangents follow the rotated kernel's vertical axis in image pixels, accounting
