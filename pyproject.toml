@@ -9,3 +9,10 @@ dependencies = [
     "numpy>=2.5.3",
     "scipy>=1.18.1",
 ]
+
+[tool.basedpyright]
+typeCheckingMode = "standard"
+pythonVersion = "3.13"
+venvPath = "."
+venv = ".venv"
+include = ["main.py", "convolution.py", "convolution_ui.py"]
