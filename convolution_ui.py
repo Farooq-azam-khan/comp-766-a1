@@ -9,9 +9,9 @@ from typing import Literal, final
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import colormaps
+from matplotlib.axes import Axes
 from matplotlib.backend_bases import MouseEvent
 from matplotlib.colors import to_rgba
-from matplotlib.axes import Axes
 from matplotlib.patches import FancyBboxPatch, Rectangle
 from matplotlib.widgets import Button, CheckButtons, Slider
 from PIL import Image
@@ -91,11 +91,9 @@ class VariantButton(Button):
             self._pressed = inside and self.canvas.mouse_grabber is self.ax
         elif event.name == "button_release_event":
             self._pressed = False
-        color = (
-            self.style.pressed
-            if inside and self._pressed
-            else self.style.hover if inside else self.style.background
-        )
+        color = self.style.background
+        if inside:
+            color = self.style.pressed if self._pressed else self.style.hover
         # Skip redraws for mouse motion that leaves the state unchanged.
         if self.background.get_facecolor() == to_rgba(color):
             return
