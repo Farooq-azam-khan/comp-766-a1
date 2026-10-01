@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import colormaps
 from matplotlib.widgets import Button, CheckButtons, RadioButtons, Slider
-from numpy.typing import NDArray
 from PIL import Image
 
 from convolution import (
