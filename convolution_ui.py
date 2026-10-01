@@ -1,13 +1,19 @@
 """Matplotlib controls and previews for the oriented convolution filters."""
 
 import json
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import final
+from typing import Literal, final
 
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import colormaps
-from matplotlib.widgets import Button, CheckButtons, RadioButtons, Slider
+from matplotlib.backend_bases import MouseEvent
+from matplotlib.colors import to_rgba
+from matplotlib.axes import Axes
+from matplotlib.patches import FancyBboxPatch, Rectangle
+from matplotlib.widgets import Button, CheckButtons, Slider
 from PIL import Image
 
 from convolution import (
@@ -19,6 +25,83 @@ from convolution import (
     convolve_image_with_all_orientations,
     save_greyscale_img,
 )
+
+
+ButtonVariant = Literal["primary", "secondary", "accent", "outline"]
+
+
+@dataclass(frozen=True)
+class ButtonStyle:
+    background: str
+    foreground: str
+    hover: str
+    pressed: str
+    border: str
+
+
+BUTTON_STYLES: dict[ButtonVariant, ButtonStyle] = {
+    "primary": ButtonStyle("#18181b", "#ffffff", "#303036", "#09090b", "#18181b"),
+    "secondary": ButtonStyle("#f4f4f5", "#27272a", "#e4e4e7", "#d4d4d8", "#e4e4e7"),
+    "accent": ButtonStyle("#2563eb", "#ffffff", "#1d4ed8", "#1e40af", "#2563eb"),
+    "outline": ButtonStyle("#ffffff", "#27272a", "#f4f4f5", "#e4e4e7", "#d4d4d8"),
+}
+
+
+class VariantButton(Button):
+    """A Matplotlib button with shared colors and rounded interaction states."""
+
+    def __init__(self, ax: Axes, label: str, variant: ButtonVariant) -> None:
+        # Keep the native button's hit testing and callbacks. Its background is
+        # transparent so the rounded patch supplies all visible button states.
+        super().__init__(ax, label, color="none", hovercolor="none", useblit=False)
+        self.style = BUTTON_STYLES[variant]
+        self._pressed = False
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+        self.background = FancyBboxPatch(
+            (0, 0),
+            1,
+            1,
+            boxstyle="round,pad=0,rounding_size=0.025",
+            transform=ax.transAxes,
+            facecolor=self.style.background,
+            edgecolor=self.style.border,
+            linewidth=0.8,
+            clip_on=False,
+            zorder=1,
+        )
+        ax.add_patch(self.background)
+        self.label.set(color=self.style.foreground, fontsize=10, fontweight="bold")
+        self._resize(None)
+        self.connect_event("resize_event", self._resize)
+        for name in ("motion_notify_event", "button_press_event", "button_release_event"):
+            self.connect_event(name, self._update_state)
+
+    def _resize(self, _event: object) -> None:
+        # Match the corner radius in physical units on wide and narrow buttons.
+        aspect = self.ax.bbox.width / self.ax.bbox.height
+        self.background.set_mutation_aspect(aspect)
+        self.background.set_boxstyle("round", pad=0, rounding_size=0.16 / aspect)
+
+    def _update_state(self, event: MouseEvent) -> None:
+        if self.ignore(event):
+            return
+        inside = self.ax.contains(event)[0]
+        if event.name == "button_press_event":
+            self._pressed = inside and self.canvas.mouse_grabber is self.ax
+        elif event.name == "button_release_event":
+            self._pressed = False
+        color = (
+            self.style.pressed
+            if inside and self._pressed
+            else self.style.hover if inside else self.style.background
+        )
+        # Skip redraws for mouse motion that leaves the state unchanged.
+        if self.background.get_facecolor() == to_rgba(color):
+            return
+        self.background.set_facecolor(color)
+        if self.drawon:
+            self.canvas.draw_idle()
 
 
 def angle_label(index: int) -> str:
@@ -152,29 +235,61 @@ class ConvolutionUI:
         self.checks = CheckButtons(
             self.fig.add_axes((0.05, 0.025, 0.23, 0.105)),
             ["Auto update", "Auto contrast"],
-            [True, False],
+            [True, True],
         )
         self.checks.on_clicked(self.toggle_option)
 
-        labels = ["All"] + [angle_label(i) for i in range(ORIENTATION_COUNT)]
-        self.orientation_button = Button(
-            self.fig.add_axes((0.72, 0.405, 0.25, 0.04)),
-            f"Orientation: {labels[1]} ▾",
+        self.orientation_labels = ["All"] + [
+            angle_label(i) for i in range(ORIENTATION_COUNT)
+        ]
+        self.orientation_button = VariantButton(
+            self.fig.add_axes((0.72, 0.398, 0.25, 0.047)),
+            f"Orientation: {self.orientation_labels[1]} ▾",
+            "outline",
         )
         self.orientation_button.on_clicked(self.toggle_orientation_menu)
-        self.orientation_menu_ax = self.fig.add_axes((0.73, 0.12, 0.22, 0.68))
+        self.orientation_menu_ax = self.fig.add_axes((0.73, 0.45, 0.22, 0.45))
         self.orientation_menu_ax.set_zorder(20)
-        self.orientation_menu = RadioButtons(self.orientation_menu_ax, labels, active=1)
-        self.orientation_menu.on_clicked(self.select_orientation)
+        self.orientation_menu_ax.set(
+            xlim=(0, 1), ylim=(0, len(self.orientation_labels))
+        )
+        self.orientation_menu_ax.set_xticks([])
+        self.orientation_menu_ax.set_yticks([])
+        self.orientation_menu_ax.set_facecolor("white")
+        for spine in self.orientation_menu_ax.spines.values():
+            spine.set_color(BUTTON_STYLES["outline"].border)
+            spine.set_linewidth(0.8)
+        self.orientation_menu_selection = Rectangle(
+            (0, len(self.orientation_labels) - 2),
+            1,
+            1,
+            facecolor="#dbeafe",
+            edgecolor="none",
+        )
+        self.orientation_menu_ax.add_patch(self.orientation_menu_selection)
+        for row, label in enumerate(self.orientation_labels):
+            self.orientation_menu_ax.text(
+                0.08,
+                len(self.orientation_labels) - row - 0.5,
+                label,
+                va="center",
+                fontsize=10,
+                color=BUTTON_STYLES["outline"].foreground,
+            )
+        self.fig.canvas.mpl_connect(
+            "button_press_event", self.on_orientation_menu_click
+        )
         self.orientation_menu_ax.set_visible(False)
 
-        self.buttons: list[Button] = []
-        for label, x, callback in (
-            ("Apply", 0.34, self.apply),
-            ("Reset", 0.51, self.reset),
-            ("Save view", 0.68, self.save),
+        self.buttons: list[VariantButton] = []
+        for label, x, callback, variant in (
+            ("Apply", 0.34, self.apply, "primary"),
+            ("Reset", 0.51, self.reset, "secondary"),
+            ("Save view", 0.68, self.save, "accent"),
         ):
-            button = Button(self.fig.add_axes((x, 0.065, 0.14, 0.045)), label)
+            button = VariantButton(
+                self.fig.add_axes((x, 0.065, 0.14, 0.047)), label, variant
+            )
             button.on_clicked(callback)
             self.buttons.append(button)
 
@@ -221,14 +336,19 @@ class ConvolutionUI:
         self.orientation_menu_ax.set_visible(not self.orientation_menu_ax.get_visible())
         self.fig.canvas.draw_idle()
 
+    def on_orientation_menu_click(self, event: MouseEvent) -> None:
+        if event.inaxes is not self.orientation_menu_ax or event.ydata is None:
+            return
+        row = len(self.orientation_labels) - 1 - int(event.ydata)
+        if 0 <= row < len(self.orientation_labels):
+            self.select_orientation(self.orientation_labels[row])
+
     def select_orientation(self, label: str | None) -> None:
         if label is None:
             return
-        self.selected_index = (
-            None
-            if label == "All"
-            else int(round(float(label.removesuffix("°")) * ORIENTATION_COUNT / 180))
-        )
+        row = self.orientation_labels.index(label)
+        self.selected_index = None if row == 0 else row - 1
+        self.orientation_menu_selection.set_y(len(self.orientation_labels) - row - 1)
         self.orientation_button.label.set_text(f"Orientation: {label} ▾")
         self.orientation_menu_ax.set_visible(False)
         self.refresh_display()
@@ -331,13 +451,15 @@ class ConvolutionUI:
         if self.dirty or not self.results or params is None:
             return
 
-        output_dir = self.path.with_name(f"{self.path.stem}_orientations")
         indices = (
             range(ORIENTATION_COUNT)
             if self.selected_index is None
             else (self.selected_index,)
         )
         suffix = "all" if self.selected_index is None else f"{self.selected_index:02d}"
+        output_root = self.path.with_name(f"{self.path.stem}_orientations")
+        run_name = f"{datetime.now(UTC).strftime('%Y%m%d_%H%M%S_%fZ')}_{suffix}"
+        output_dir = output_root / run_name
         low, high = self.display_limits()
         kernel_limit = max(
             1e-12, *(float(np.abs(item.kernel).max()) for item in self.results)
@@ -345,7 +467,7 @@ class ConvolutionUI:
         orientations = []
 
         try:
-            output_dir.mkdir(exist_ok=True)
+            output_dir.mkdir(parents=True)
             Image.fromarray(self.original).save(output_dir / "original.png")
             save_greyscale_img(self.image, output_dir / "grayscale.png")
             for index in indices:
@@ -399,4 +521,6 @@ class ConvolutionUI:
         except (OSError, ValueError) as exc:
             self.message(f"Save failed: {exc}", True)
             return
-        self.message(f"Saved {len(orientations)} orientation(s) to {output_dir}.")
+        self.message(
+            f"Saved {len(orientations)} orientation(s) to {output_root.name}/{run_name}."
+        )
