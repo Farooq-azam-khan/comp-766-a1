@@ -62,7 +62,7 @@ class ConvolutionUI:
             ("A", 0.0, 3.0, 0.5, 0.01),
             ("B", 0.0, 3.0, 1.5, 0.01),
             ("C", 0.0, 3.0, 0.5, 0.01),
-            ("samples", 5, 201, 101, 2),
+            ("samples", 5, 201, 100, 2),
         ]
         self.sliders: dict[str, Slider] = {}
         for i, (name, low, high, initial, step) in enumerate(specifications):

@@ -44,9 +44,16 @@ def G_np(
     )
     return line_spread * np.exp(-((ys / sigma_y) ** 2))
 
+def generate_grid_from_angle(theta, samples: int = 15):
+    xs, ys = np.meshgrid(
+            np.linspace(*X_RANGE, samples),
+            np.linspace(*Y_RANGE, samples),
+        )
+    return xs*np.cos(theta)+ys*np.sin(theta), -xs*np.sin(theta)+ys*np.cos(theta)
 
 def generate_kernel(
-    samples: int = 15,
+    theta=0*np.pi/16,
+    samples: int = 100,
     *,
     sigma_y: float = 1.0,
     sigma_1: float = 0.8,
@@ -59,11 +66,7 @@ def generate_kernel(
     """Sample G and normalize its sum to one for image convolution."""
     if samples < 2:
         raise ValueError("The kernel needs at least two samples per axis.")
-
-    xs, ys = np.meshgrid(
-        np.linspace(*X_RANGE, samples),
-        np.linspace(*Y_RANGE, samples),
-    )
+    xs, ys = generate_grid_from_angle(theta,samples)
     kernel = G_np(xs, ys, sigma_y, sigma_1, sigma_2, sigma_3, A, B, C)
     total = kernel.sum()
     if abs(total) <= 1e-6 * max(np.abs(kernel).sum(), 1e-12):
@@ -79,6 +82,9 @@ def convolve_image_with_kernel(
     padded = np.pad(image, ((pad_y, pad_y), (pad_x, pad_x)), mode="symmetric")
     return cast(NDArray[np.float64], fftconvolve(padded, kernel, mode="valid"))
 
+def convolve_image_with_all_orientations(image):
+    kernels = [generate_kernel(i*np.pi/16) for i in range(0,15)]
+    images = [convolve_image_with_kernel(kernel, image) for kernel in kernels]
 
 def load_greyscale_img(path: str | PathLike[str]) -> NDArray[np.float64]:
     """Read an image as grayscale values between zero and one."""
