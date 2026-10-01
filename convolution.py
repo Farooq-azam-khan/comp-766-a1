@@ -10,6 +10,7 @@ import numpy as np
 from numpy.typing import NDArray
 from PIL import Image
 from scipy.signal import fftconvolve
+from scipy.special import softmax
 
 X_RANGE = (-2.0, 2.0)
 Y_RANGE = (-2.5, 2.5)
@@ -115,13 +116,19 @@ def convolve_image_with_all_orientations(
     test = results[0].response
     print('orientation 0 resp=',test.min(), test.max())
     return results
-from scipy.special import softmax
 
 
-def softmax_results(or_re: list[OrientationResult]):
-    pixel00_norm = np.array([or_re[i].response[0][0] for i in range(15)])
-    print(pixel00_norm)
-    prob_pixel00_orientations = softmax(pixel00_norm)
+def softmax_results(
+    results: list[OrientationResult],
+    temperature: float = 1.0,
+) -> NDArray[np.float64]:
+    if temperature <= 0:
+        raise ValueError("temperature must be positive")
+
+    responses = np.stack([r.response for r in results], axis=0)
+    # Shape: (16, height, width)
+    return softmax(responses / temperature, axis=0)
+
 
 def load_greyscale_img(path: str | PathLike[str]) -> NDArray[np.float64]:
     """Read an image as grayscale values between zero and one."""
