@@ -1,5 +1,6 @@
 """Generate a Gaussian difference kernel and apply it to a grayscale image."""
 
+from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
 from typing import TypedDict, cast
@@ -12,6 +13,7 @@ from scipy.signal import fftconvolve
 
 X_RANGE = (-2.0, 2.0)
 Y_RANGE = (-2.5, 2.5)
+ORIENTATION_COUNT = 16
 
 
 class KernelParameters(TypedDict):
@@ -23,6 +25,14 @@ class KernelParameters(TypedDict):
     A: float
     B: float
     C: float
+
+
+@dataclass(frozen=True)
+class OrientationResult:
+    index: int
+    angle_radians: float
+    kernel: NDArray[np.float64]
+    response: NDArray[np.float64]
 
 
 def G_np(
@@ -44,16 +54,24 @@ def G_np(
     )
     return line_spread * np.exp(-((ys / sigma_y) ** 2))
 
-def generate_grid_from_angle(theta, samples: int = 15):
+
+def generate_grid_from_angle(
+    theta: float, samples: int
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Rotate sampling coordinates while keeping the output grid fixed."""
     xs, ys = np.meshgrid(
-            np.linspace(*X_RANGE, samples),
-            np.linspace(*Y_RANGE, samples),
-        )
-    return xs*np.cos(theta)+ys*np.sin(theta), -xs*np.sin(theta)+ys*np.cos(theta)
+        np.linspace(*X_RANGE, samples),
+        np.linspace(*Y_RANGE, samples),
+    )
+    return (
+        xs * np.cos(theta) + ys * np.sin(theta),
+        -xs * np.sin(theta) + ys * np.cos(theta),
+    )
+
 
 def generate_kernel(
-    theta=0*np.pi/16,
-    samples: int = 100,
+    theta: float = 0.0,
+    samples: int = 101,
     *,
     sigma_y: float = 1.0,
     sigma_1: float = 0.8,
@@ -64,9 +82,9 @@ def generate_kernel(
     C: float = 0.5,
 ) -> NDArray[np.float64]:
     """Sample G and normalize its sum to one for image convolution."""
-    if samples < 2:
-        raise ValueError("The kernel needs at least two samples per axis.")
-    xs, ys = generate_grid_from_angle(theta,samples)
+    if samples < 3 or samples % 2 == 0:
+        raise ValueError("The kernel needs an odd sample count of at least three.")
+    xs, ys = generate_grid_from_angle(theta, samples)
     kernel = G_np(xs, ys, sigma_y, sigma_1, sigma_2, sigma_3, A, B, C)
     total = kernel.sum()
     if abs(total) <= 1e-6 * max(np.abs(kernel).sum(), 1e-12):
@@ -82,9 +100,19 @@ def convolve_image_with_kernel(
     padded = np.pad(image, ((pad_y, pad_y), (pad_x, pad_x)), mode="symmetric")
     return cast(NDArray[np.float64], fftconvolve(padded, kernel, mode="valid"))
 
-def convolve_image_with_all_orientations(image):
-    kernels = [generate_kernel(i*np.pi/16) for i in range(0,15)]
-    images = [convolve_image_with_kernel(kernel, image) for kernel in kernels]
+
+def convolve_image_with_all_orientations(
+    image: NDArray[np.float64], params: KernelParameters
+) -> list[OrientationResult]:
+    """Return one kernel and response map for each tangent orientation."""
+    results = []
+    for index in range(ORIENTATION_COUNT):
+        theta = index * np.pi / ORIENTATION_COUNT
+        kernel = generate_kernel(theta=theta, **params)
+        response = convolve_image_with_kernel(kernel, image)
+        results.append(OrientationResult(index, theta, kernel, response))
+    return results
+
 
 def load_greyscale_img(path: str | PathLike[str]) -> NDArray[np.float64]:
     """Read an image as grayscale values between zero and one."""
