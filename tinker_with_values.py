@@ -1,43 +1,12 @@
 """Run: python convolution_ui.py [path/to/image.png]"""
-from pathlib import Path
 import argparse
 import json
+from pathlib import Path
 
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Button, CheckButtons, Slider
 import numpy as np
-from numpy.typing import NDArray
+from matplotlib.widgets import Button, CheckButtons, Slider
 from PIL import Image
-from scipy.signal import fftconvolve
-
-
-def G_np(
-    xs: NDArray[np.float64], ys: NDArray[np.float64],
-    sigma_y: float = 1.0, sigma_1: float = 0.8,
-    sigma_2: float = 0.3, sigma_3: float = 0.8,
-    A: float = 0.5, B: float = 1.5, C: float = 0.5,
-) -> NDArray[np.float64]:
-    lsf = (A * np.exp(-(xs / sigma_1)**2)
-           - B * np.exp(-(xs / sigma_2)**2)
-           + C * np.exp(-(xs / sigma_3)**2))
-    return lsf * np.exp(-(ys / sigma_y)**2)
-
-
-def generate_kernel(params):
-    samples = int(params['samples'])
-    X, Y = np.meshgrid(np.linspace(-2, 2, samples),
-                       np.linspace(-2.5, 2.5, samples))
-    kernel = G_np(X, Y, **{k: v for k, v in params.items() if k != 'samples'})
-    total = kernel.sum()
-    if abs(total) <= 1e-6 * max(np.abs(kernel).sum(), 1e-12):
-        raise ValueError('Kernel sum is near zero. Adjust amplitudes or widths.')
-    return kernel / total
-
-
-def convolve_image_with_kernel(kernel, image):
-    py, px = kernel.shape[0] // 2, kernel.shape[1] // 2
-    padded = np.pad(image, ((py, py), (px, px)), mode='symmetric')
-    return fftconvolve(padded, kernel, mode='valid')
 
 
 class ConvolutionUI:

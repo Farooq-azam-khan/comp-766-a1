@@ -1,14 +1,11 @@
 from os import PathLike
 from pathlib import Path
 
-import numpy as np
-from scipy.signal import fftconvolve
-
 import matplotlib.pyplot as plt
+import numpy as np
 from numpy.typing import NDArray
 from PIL import Image
-from scipy.ndimage import convolve
-
+from scipy.signal import fftconvolve
 
 sigma_y = 1.0
 sigma_1 = 0.8
@@ -40,13 +37,27 @@ def G_np(
     lsf = A*np.exp(-xs**2/sigma_1**2)-B*np.exp(-xs**2/sigma_2**2)+C*np.exp(-xs**2/sigma_3**2)
     return lsf*np.exp(-ys**2/sigma_y**2)
 
-def generate_kenel():
-    samples = 15 # 300, 100
+def generate_kenel(samples: int=15):
     xs = np.linspace(-2, 2, samples)
     ys = np.linspace(-2.5, 2.5, samples)
     X, Y = np.meshgrid(xs, ys)
-    Z = G_np(X, Y, sigma_y, sigma_1,sigma_2, sigma_3, A, B,C)
-    return X, Y, Z
+    kernel = G_np(X, Y, sigma_y, sigma_1,sigma_2, sigma_3, A, B,C)
+    total = kernel.sum()
+    tol1, tol2 = 1e-6, 1e-12
+    if abs(total) <= tol1 * max(np.abs(kernel).sum(), tol2):
+        return ValueError('Kernel is close to zero. Amplitude or Widths need to be adjusted.')
+    return X, Y, kernel
+
+
+def convolve_image_with_kernel(kernel: NDArray[np.float64], image: NDArray[np.float64], ):
+    pad_x, pad_y  = kernel.shape[1] // 2, kernel.shape[0] // 2
+
+    padded = np.pad(
+        image,
+        ((pad_y, pad_y), (pad_x, pad_x)),
+        mode="symmetric",
+    )
+    return fftconvolve(padded, kernel, mode="valid")
 
 def visualize_convolution_surface(X, Y, Z):
 
@@ -72,22 +83,6 @@ def load_greyscale_img(file_name: PathLike):
         dtype=np.float64,
     ) / 255.0
     return image
-
-def convolve_image_with_kernel(kernel, image, ):
-    # result = convolve(image, kernel, mode='reflect') # too slow
-    pad_y = kernel.shape[0] // 2
-    pad_x = kernel.shape[1] // 2
-
-    padded = np.pad(
-        image,
-        ((pad_y, pad_y), (pad_x, pad_x)),
-        mode="symmetric",
-    )
-
-    result = fftconvolve(padded, kernel, mode="valid")
-    display_result = np.clip(result, 0.0, 1.0)
-    return display_result
-
 def main():
     curves_dir = Path('./curves')
     curve_path = curves_dir / 'fingerprint.png'
