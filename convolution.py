@@ -111,8 +111,17 @@ def convolve_image_with_all_orientations(
         kernel = generate_kernel(theta=theta, **params)
         response = convolve_image_with_kernel(kernel, image)
         results.append(OrientationResult(index, theta, kernel, response))
-    return results
 
+    test = results[0].response
+    print('orientation 0 resp=',test.min(), test.max())
+    return results
+from scipy.special import softmax
+
+
+def softmax_results(or_re: list[OrientationResult]):
+    pixel00_norm = np.array([or_re[i].response[0][0] for i in range(15)])
+    print(pixel00_norm)
+    prob_pixel00_orientations = softmax(pixel00_norm)
 
 def load_greyscale_img(path: str | PathLike[str]) -> NDArray[np.float64]:
     """Read an image as grayscale values between zero and one."""
@@ -126,41 +135,22 @@ def save_greyscale_img(image: NDArray[np.float64], path: str | PathLike[str]) ->
     Image.fromarray(pixels).save(path)
 
 
-def visualize_convolution_surface(kernel: NDArray[np.float64]) -> None:
-    """Show the sampled kernel as a 3D surface."""
-    xs, ys = np.meshgrid(
-        np.linspace(*X_RANGE, kernel.shape[1]),
-        np.linspace(*Y_RANGE, kernel.shape[0]),
-    )
-    fig = plt.figure(figsize=(10, 7))
-    ax = fig.add_subplot(111, projection="3d")
-    ax.plot_surface(xs, ys, kernel, cmap="viridis", edgecolor="none")
-    ax.set(xlim=X_RANGE, ylim=Y_RANGE, xlabel="X", ylabel="Y", zlabel="G(x, y)")
-    ax.view_init(elev=20, azim=-35)
-    plt.tight_layout()
-    plt.show()
-
-
 def main() -> None:
     curves_dir = Path("curves")
     image_path = curves_dir / "fingerprint.png"
     image = load_greyscale_img(image_path)
-    kernel = generate_kernel()
-    result = convolve_image_with_kernel(kernel, image)
-    save_greyscale_img(result, curves_dir / f"{image_path.stem}_convolved.png")
-
-    # visualize_convolution_surface(kernel)
-    _, axes = plt.subplots(1, 3, figsize=(14, 4))
-    axes[0].imshow(image, cmap="gray", vmin=0, vmax=1)
-    axes[0].set_title("Original")
-    axes[1].imshow(kernel, cmap="RdBu_r")
-    axes[1].set_title("Kernel")
-    axes[2].imshow(result, cmap="gray", vmin=0, vmax=1)
-    axes[2].set_title("Convolved")
-    for ax in axes:
-        ax.axis("off")
-    plt.tight_layout()
-    plt.show()
+    kernel_params = KernelParameters(
+        sigma_y=1.0,
+        sigma_1=  0.8,
+        sigma_2=  0.3,
+        sigma_3= 0.8,
+        A= 0.5,
+        B=1.5,
+        C=0.5,
+        samples=101,
+    )
+    or_res = convolve_image_with_all_orientations(image, kernel_params)
+    softmax_results(or_res)
 
 
 if __name__ == "__main__":
