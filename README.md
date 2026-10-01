@@ -16,5 +16,16 @@ uv run python main.py
 uv run python main.py curves/hair.png
 ```
 
-The UI's **Save PNG** button writes a convolved image and a JSON file with the
-selected parameters beside the input image.
+The preview shows the original color image, its grayscale input, a kernel, and
+the convolved image. Choose an angle from the orientation menu, or choose
+**All** to see all 16 kernels and responses. **Auto update** applies slider
+changes after a short pause. **Auto contrast** stretches the response display
+using one shared range across all 16 orientations.
+
+**Save view** creates a timestamped folder under
+`<image-name>_orientations/` beside the input image. It saves the original and
+grayscale images, the selected orientation's kernel and response, or all 16
+when **All** is selected. Each orientation has display PNGs and raw NumPy
+arrays. An **All** export also includes two 4 × 4 contact sheets. The manifest
+records the parameters, angles, and display range. The PNG contrast setting
+changes only the displayed pixels; the `.npy` responses keep their raw values.
