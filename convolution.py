@@ -113,8 +113,6 @@ def convolve_image_with_all_orientations(
         response = convolve_image_with_kernel(kernel, image)
         results.append(OrientationResult(index, theta, kernel, response))
 
-    test = results[0].response
-    print('orientation 0 resp=',test.min(), test.max())
     return results
 
 
