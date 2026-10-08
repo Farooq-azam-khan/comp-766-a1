@@ -25,6 +25,18 @@ class KernelParameters(TypedDict):
     C: float
 
 
+DEFAULT_KERNEL_PARAMETERS: KernelParameters = {
+    "samples": 101,
+    "sigma_y": 1.0,
+    "sigma_1": 0.8,
+    "sigma_2": 0.3,
+    "sigma_3": 0.8,
+    "A": 0.5,
+    "B": 1.5,
+    "C": 0.5,
+}
+
+
 @dataclass(frozen=True)
 class OrientationResult:
     index: int
@@ -135,18 +147,8 @@ def tangent_segments(
     threshold: float,
     spacing: int,
 ) -> NDArray[np.float64]:
-    segments = []
+    labels, rows, cols = np.nonzero(probabilities[:, ::spacing, ::spacing] > threshold)
+    centers = np.column_stack((cols, rows)) * spacing
     half_length = max(3.0, spacing * 0.75)
-    for angle, assignments in zip(angles, probabilities):
-        rows, cols = np.nonzero(assignments[::spacing, ::spacing] > threshold)
-        centers = np.column_stack((cols * spacing, rows * spacing))
-        offset = half_length * np.array([np.cos(angle), np.sin(angle)])
-        segments.append(np.stack((centers - offset, centers + offset), axis=1))
-    return np.concatenate(segments) if segments else np.empty((0, 2, 2))
-
-
-def main():
-    pass
-
-if __name__ == "__main__":
-    main()
+    offsets = half_length * np.column_stack((np.cos(angles[labels]), np.sin(angles[labels])))
+    return np.stack((centers - offsets, centers + offsets), axis=1)

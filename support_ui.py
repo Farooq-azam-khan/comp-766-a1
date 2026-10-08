@@ -10,8 +10,8 @@ from numpy.typing import NDArray
 from PIL import Image
 
 from convolution import (
+    DEFAULT_KERNEL_PARAMETERS,
     ORIENTATION_COUNT,
-    KernelParameters,
     convolve_image_with_all_orientations,
     softmax_results,
     tangent_angles,
@@ -94,8 +94,8 @@ class SupportUI:
         support_segments = tangent_segments(
             self.angles, displayed_support, float(self.support_threshold.val), spacing
         )
-        self.initial_artist.set_segments(list(initial_segments))
-        self.support_artist.set_segments(list(support_segments))
+        self.initial_artist.set_segments(initial_segments)
+        self.support_artist.set_segments(support_segments)
         self.axes[0].set_title(
             f"Initial tangents · p > {self.initial_threshold.val:.2f}\n{len(initial_segments):,} vectors",
             fontsize=10,
@@ -154,10 +154,7 @@ def main() -> None:
     args = parser.parse_args()
     if not np.isfinite(args.temperature) or args.temperature <= 0:
         parser.error("Temperature must be finite and positive.")
-    params: KernelParameters = {
-        "samples": 101, "sigma_y": 1.0, "sigma_1": 0.8, "sigma_2": 0.3,
-        "sigma_3": 0.8, "A": 0.5, "B": 1.5, "C": 0.5,
-    }
+    params = DEFAULT_KERNEL_PARAMETERS.copy()
     try:
         with Image.open(args.image) as source:
             original = np.asarray(source.convert("RGB"), dtype=np.uint8)

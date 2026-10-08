@@ -77,14 +77,6 @@ class CocircularityTests(unittest.TestCase):
             with self.subTest(beta=beta, angle=angle):
                 self.assertAlmostEqual(gamma(beta, angle), expected)
 
-    def test_invalid_angles(self):
-        for angle in [-0.1, np.pi + 0.1, np.nan, np.inf]:
-            with self.subTest(angle=angle):
-                with self.assertRaises(ValueError):
-                    gamma(angle, 0)
-                with self.assertRaises(ValueError):
-                    gamma(0, angle)
-
     def test_collinear_tangents_in_all_quadrants(self):
         for posj in [(10, 0), (-10, 0), (0, 10), (0, -10),
                      (10, 10), (-10, 10), (-10, -10), (10, -10)]:
@@ -114,11 +106,6 @@ class CocircularityTests(unittest.TestCase):
         posi = np.array([10, 10], dtype=np.uint8)
         posj = np.array([0, 0], dtype=np.uint8)
         self.assertTrue(is_cocircular(posi, posj, np.pi / 4, np.pi / 4))
-
-    def test_invalid_positions(self):
-        for posj in [(0, 0), (0.5, 0), (np.nan, 0), (np.inf, 0)]:
-            with self.subTest(posj=posj), self.assertRaises(ValueError):
-                is_cocircular((0, 0), posj, 0, 0)
 
     def test_coefficient(self):
         self.assertEqual(cocircularity_coeff((0, 0), (0, 10), 8, 8), 1)
@@ -150,8 +137,6 @@ class SupportTests(unittest.TestCase):
         self.assertAlmostEqual(edges[3], -0.08)
         self.assertAlmostEqual(edges[4], 0.08)
         np.testing.assert_array_equal(default_curvature_edges(5, class_count=1), [-0.2, 0.2])
-        with self.assertRaises(ValueError):
-            default_curvature_edges(5, class_count=4)
 
     def test_matches_direct_equation_with_previous_classes(self) -> None:
         rng = np.random.default_rng(7)
@@ -212,26 +197,6 @@ class SupportTests(unittest.TestCase):
             curvature_classes=np.full(probabilities.shape, -1, dtype=np.int64),
         )
         np.testing.assert_array_equal(support, 0.0)
-
-    def test_invalid_inputs(self) -> None:
-        probabilities = np.ones((2, 3, 4))
-        angles = np.array([0.0, np.pi / 2])
-        edges = np.array([-1.0, 0.0, 1.0])
-        cases = [
-            {"probabilities": probabilities[0]},
-            {"probabilities": -probabilities},
-            {"tangent_angles": angles[:1]},
-            {"neighborhood_radius": 0},
-            {"curvature_edges": edges[::-1]},
-            {"c_min": -0.1},
-            {"curvature_classes": np.zeros((2, 1, 1), dtype=np.int64)},
-        ]
-        for overrides in cases:
-            with self.subTest(overrides=overrides.keys()), self.assertRaises(ValueError):
-                generate_support(**{
-                    "probabilities": probabilities, "tangent_angles": angles,
-                    "neighborhood_radius": 2, "curvature_edges": edges, **overrides,
-                })
 
 
 class SupportVisualizationTests(unittest.TestCase):

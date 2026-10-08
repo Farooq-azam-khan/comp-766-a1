@@ -16,6 +16,7 @@ from matplotlib.widgets import Button, CheckButtons, Slider
 from PIL import Image
 
 from convolution import (
+    DEFAULT_KERNEL_PARAMETERS,
     ORIENTATION_COUNT,
     X_RANGE,
     Y_RANGE,
@@ -73,18 +74,18 @@ class VariantButton(Button):
         )
         ax.add_patch(self.background)
         self.label.set(color=self.style.foreground, fontsize=10, fontweight="bold")
-        self._resize(None)
-        self.connect_event("resize_event", self._resize)
+        self.resize(None)
+        self.connect_event("resize_event", self.resize)
         for name in ("motion_notify_event", "button_press_event", "button_release_event"):
-            self.connect_event(name, self._update_state)
+            self.connect_event(name, self.update_state)
 
-    def _resize(self, _event: object) -> None:
+    def resize(self, _event: object) -> None:
         # Match the corner radius in physical units on wide and narrow buttons.
         aspect = self.ax.bbox.width / self.ax.bbox.height
         self.background.set_mutation_aspect(aspect)
         self.background.set_boxstyle("round", pad=0, rounding_size=0.16 / aspect)
 
-    def _update_state(self, event: MouseEvent) -> None:
+    def update_state(self, event: MouseEvent) -> None:
         if self.ignore(event):
             return
         inside = self.ax.contains(event)[0]
@@ -209,17 +210,17 @@ class ConvolutionUI:
     def create_controls(self) -> None:
         # Slider values use the same names as KernelParameters.
         specifications = [
-            ("sigma_y", 0.05, 2.5, 1.0, 0.01),
-            ("sigma_1", 0.05, 2.0, 0.8, 0.01),
-            ("sigma_2", 0.05, 2.0, 0.3, 0.01),
-            ("sigma_3", 0.05, 2.0, 0.8, 0.01),
-            ("A", 0.0, 3.0, 0.5, 0.01),
-            ("B", 0.0, 3.0, 1.5, 0.01),
-            ("C", 0.0, 3.0, 0.5, 0.01),
-            ("samples", 5, 201, 101, 2),
+            ("sigma_y", 0.05, 2.5, 0.01),
+            ("sigma_1", 0.05, 2.0, 0.01),
+            ("sigma_2", 0.05, 2.0, 0.01),
+            ("sigma_3", 0.05, 2.0, 0.01),
+            ("A", 0.0, 3.0, 0.01),
+            ("B", 0.0, 3.0, 0.01),
+            ("C", 0.0, 3.0, 0.01),
+            ("samples", 5, 201, 2),
         ]
         self.sliders: dict[str, Slider] = {}
-        for index, (name, low, high, initial, step) in enumerate(specifications):
+        for index, (name, low, high, step) in enumerate(specifications):
             col, row = divmod(index, 4)
             slider_ax = self.fig.add_axes(
                 (0.12 + col * 0.47, 0.365 - row * 0.064, 0.31, 0.026)
@@ -229,7 +230,7 @@ class ConvolutionUI:
                 name,
                 low,
                 high,
-                valinit=initial,
+                valinit=DEFAULT_KERNEL_PARAMETERS[name],
                 valstep=step,
                 valfmt="%d" if name == "samples" else "%.2f",
             )
@@ -408,17 +409,14 @@ class ConvolutionUI:
             self.probabilities, threshold, spacing,
         )
         self.vector_artist.set_segments(self.vector_segments)
-        self.original_ax.set_title(
-            f"Initial tangents · p > {threshold:.2f}\n"
-            f"{len(self.vector_segments):,} vectors · every {spacing} px",
-            fontsize=10,
-        )
-        if not len(self.vector_segments):
+        if len(self.vector_segments):
+            detail = f"{len(self.vector_segments):,} vectors · every {spacing} px"
+        else:
             maximum = float(self.probabilities[:, ::spacing, ::spacing].max())
-            self.original_ax.set_title(
-                f"Initial tangents · p > {threshold:.2f}\n"
-                f"Max p = {maximum:.3f}; lower threshold or temp", fontsize=10,
-            )
+            detail = f"Max p = {maximum:.3f}; lower threshold or temp"
+        self.original_ax.set_title(
+            f"Initial tangents · p > {threshold:.2f}\n{detail}", fontsize=10
+        )
         self.fig.canvas.draw_idle()
 
     def display_limits(self) -> tuple[float, float]:
@@ -456,14 +454,15 @@ class ConvolutionUI:
             response_artist.set_clim(low, high)
 
         show_all = self.selected_index is None
-        self.kernel_ax.set_visible(not show_all)
-        self.response_ax.set_visible(not show_all)
-        self.kernel_header.set_visible(show_all)
-        self.response_header.set_visible(show_all)
-        for ax in self.kernel_grid_axes + self.response_grid_axes:
-            ax.set_visible(show_all)
+        for ax in (self.kernel_ax, self.response_ax):
+            ax.set_visible(not show_all)
+        for artist in (
+            self.kernel_header, self.response_header,
+            *self.kernel_grid_axes, *self.response_grid_axes,
+        ):
+            artist.set_visible(show_all)
 
-        if not show_all and self.selected_index is not None:
+        if self.selected_index is not None:
             item = self.results[self.selected_index]
             self.kernel_artist.set_data(item.kernel)
             self.kernel_artist.set_clim(-kernel_limit, kernel_limit)

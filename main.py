@@ -5,7 +5,6 @@ Run: python main.py [path/to/image.png]
 
 import argparse
 from pathlib import Path
-from typing import cast
 
 import matplotlib.pyplot as plt
 
@@ -18,7 +17,7 @@ def main() -> None:
         "image", nargs="?", type=Path, default=Path("curves/spaghetti.png")
     )
     args = parser.parse_args()
-    image_path = cast(Path, args.image)
+    image_path = args.image
     if not image_path.is_file():
         parser.error(f"Image not found: {image_path}")
 

@@ -10,12 +10,6 @@ type Position = Sequence[float] | NDArray[np.number]
 
 
 def gamma(beta: float, gamma: float) -> float:
-    if not 0 <= beta <= np.pi:
-        raise ValueError(f'{beta=} not in range 0 to pi.')
-
-    if not 0 <= gamma <= np.pi:
-        raise ValueError(f'{gamma=} not in range 0 to pi.')
-
     difference = gamma - beta
     if difference > np.pi / 2:
         return difference - np.pi
@@ -34,9 +28,6 @@ def is_cocircular(
     dx = float(posj[0]) - float(posi[0])
     dy = float(posj[1]) - float(posi[1])
     d_ij = np.hypot(dx, dy)
-    if not np.isfinite(d_ij) or d_ij < 1:
-        raise ValueError('Positions must be finite and at least one pixel apart.')
-
     alpha = np.arcsin(1 / d_ij)
     theta_ij = float(np.arctan2(dy, dx) % np.pi)
     return bool(
@@ -56,8 +47,6 @@ def cocircularity_coeff(
     theta_lam_prime = lam_prime * np.pi / ORIENTATION_COUNT
     if is_cocircular(posi, posj, theta_lam, theta_lam_prime):
         return 1.0
-    # fig 9: not doing too much geometry
-    # drop_off_slope = 0.1 # eta in the paper.
     return c_min
 
 
@@ -66,12 +55,6 @@ def default_curvature_edges(
     max_curvature: float = 0.2,
     class_count: int = 7,
 ) -> NDArray[np.float64]:
-    if neighborhood_radius < 1:
-        raise ValueError('Neighborhood radius must be positive.')
-    if not np.isfinite(max_curvature) or max_curvature <= 0:
-        raise ValueError('Maximum curvature must be finite and positive.')
-    if class_count < 1 or class_count % 2 == 0:
-        raise ValueError('Use a positive odd number of curvature classes.')
     if class_count == 1:
         return np.array([-max_curvature, max_curvature])
     straight_limit = min(2 / neighborhood_radius ** 2, max_curvature / 2)
@@ -80,7 +63,7 @@ def default_curvature_edges(
 
 
 @dataclass(frozen=True)
-class _SupportOffset:
+class SupportOffset:
     dy: int
     dx: int
     labels: NDArray[np.int64]
@@ -89,7 +72,7 @@ class _SupportOffset:
     coefficients: NDArray[np.float64]
 
 
-def _curvature_classes(
+def classify_curvatures(
     curvatures: NDArray[np.float64], edges: NDArray[np.float64]
 ) -> NDArray[np.int64]:
     indices = np.searchsorted(edges, curvatures, side="right") - 1
@@ -98,12 +81,12 @@ def _curvature_classes(
     return indices.astype(np.int64)
 
 
-def _support_offsets(
+def support_offsets(
     angles: NDArray[np.float64],
     radius: int,
     edges: NDArray[np.float64],
     c_min: float,
-) -> list[_SupportOffset]:
+) -> list[SupportOffset]:
     offsets = []
     for dy in range(-radius, radius + 1):
         for dx in range(-radius, radius + 1):
@@ -111,12 +94,9 @@ def _support_offsets(
             if distance_squared == 0 or distance_squared > radius * radius:
                 continue
             chord_angle = np.arctan2(dy, dx) % np.pi
-            differences = chord_angle - angles
-            interior_angles = np.where(
-                differences > np.pi / 2,
-                differences - np.pi,
-                np.where(differences < -np.pi / 2, differences + np.pi, differences),
-            )
+            interior_angles = chord_angle - angles
+            interior_angles[interior_angles > np.pi / 2] -= np.pi
+            interior_angles[interior_angles < -np.pi / 2] += np.pi
             tolerance = np.pi / ORIENTATION_COUNT + 2 * np.arcsin(
                 1 / np.sqrt(distance_squared)
             )
@@ -126,20 +106,20 @@ def _support_offsets(
                 c_min,
             )
             curvatures = 2 * (np.cos(angles) * dy - np.sin(angles) * dx) / distance_squared
-            target_classes = _curvature_classes(curvatures, edges)
-            neighbor_classes = _curvature_classes(-curvatures, edges)
+            target_classes = classify_curvatures(curvatures, edges)
+            neighbor_classes = classify_curvatures(-curvatures, edges)
             labels = np.flatnonzero(target_classes >= 0)
             if labels.size:
-                offsets.append(_SupportOffset(
+                offsets.append(SupportOffset(
                     dy, dx, labels, target_classes[labels], neighbor_classes,
                     coefficients[labels],
                 ))
     return offsets
 
 
-def _accumulate_support(
+def accumulate_support(
     probabilities: NDArray[np.float64],
-    offsets: list[_SupportOffset],
+    offsets: list[SupportOffset],
     class_count: int,
     curvature_classes: NDArray[np.int64] | None,
 ) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
@@ -190,37 +170,13 @@ def generate_support(
     curvature_classes: NDArray[np.int64] | None = None,
     c_min: float = 0.1,
 ) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
-    if probabilities.ndim != 3 or any(size == 0 for size in probabilities.shape):
-        raise ValueError('Probabilities must have shape (orientations, height, width).')
-    if not np.all(np.isfinite(probabilities)) or np.any(probabilities < 0):
-        raise ValueError('Probabilities must be finite and nonnegative.')
-    if tangent_angles.shape != (probabilities.shape[0],):
-        raise ValueError('Provide one tangent angle per orientation.')
-    if not np.all(np.isfinite(tangent_angles)) or np.any(
-        (tangent_angles < 0) | (tangent_angles > np.pi)
-    ):
-        raise ValueError('Tangent angles must be finite and in range 0 to pi.')
-    if not isinstance(neighborhood_radius, int) or neighborhood_radius < 1:
-        raise ValueError('Neighborhood radius must be a positive integer.')
-    if curvature_edges.ndim != 1 or curvature_edges.size < 2 or not np.all(
-        np.isfinite(curvature_edges)
-    ) or np.any(np.diff(curvature_edges) <= 0):
-        raise ValueError('Curvature edges must be finite and strictly increasing.')
-    if not 0 <= c_min <= 1:
-        raise ValueError('c_min must be in range 0 to 1.')
     class_count = len(curvature_edges) - 1
-    if curvature_classes is not None and (
-        curvature_classes.shape != probabilities.shape
-        or not np.issubdtype(curvature_classes.dtype, np.integer)
-        or np.any((curvature_classes < -1) | (curvature_classes >= class_count))
-    ):
-        raise ValueError('Curvature classes must match probabilities and contain valid indices.')
-    offsets = _support_offsets(
+    offsets = support_offsets(
         tangent_angles, neighborhood_radius, curvature_edges, c_min
     )
     if curvature_classes is None:
-        initial_support, curvature_classes = _accumulate_support(
+        initial_support, curvature_classes = accumulate_support(
             probabilities, offsets, class_count, None
         )
         del initial_support
-    return _accumulate_support(probabilities, offsets, class_count, curvature_classes)
+    return accumulate_support(probabilities, offsets, class_count, curvature_classes)
