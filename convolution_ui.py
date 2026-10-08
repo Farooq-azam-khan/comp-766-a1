@@ -1,5 +1,3 @@
-"""Matplotlib controls and previews for the oriented convolution filters."""
-
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -26,8 +24,8 @@ from convolution import (
     convolve_image_with_all_orientations,
     save_greyscale_img,
     softmax_results,
+    tangent_segments,
 )
-
 
 ButtonVariant = Literal["primary", "secondary", "accent", "outline"]
 
@@ -107,32 +105,6 @@ class VariantButton(Button):
 def angle_label(index: int) -> str:
     """Label angles relative to the vertical reference kernel."""
     return f"{index * 180 / ORIENTATION_COUNT:g}°"
-
-
-def tangent_segments(
-    results: list[OrientationResult],
-    probabilities: np.ndarray,
-    threshold: float,
-    spacing: int,
-) -> np.ndarray:
-    """Draw centered, undirected tangents at sampled image pixels."""
-    segments = []
-    half_length = max(3.0, spacing * 0.75)
-    for item, assignments in zip(results, probabilities):
-        rows, cols = np.nonzero(assignments[::spacing, ::spacing] > threshold)
-        centers = np.column_stack((cols * spacing, rows * spacing))
-        # The kernel's vertical axis rotates in sampling coordinates. Convert
-        # that direction to image pixels, accounting for unequal grid ranges.
-        direction = np.array(
-            [
-                -np.sin(item.angle_radians) / (X_RANGE[1] - X_RANGE[0]),
-                np.cos(item.angle_radians) / (Y_RANGE[1] - Y_RANGE[0]),
-            ]
-        )
-        offset = half_length * direction / np.linalg.norm(direction)
-        segments.append(np.stack((centers - offset, centers + offset), axis=1))
-    return np.concatenate(segments) if segments else np.empty((0, 2, 2))
-
 
 @final
 class ConvolutionUI:

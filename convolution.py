@@ -1,11 +1,8 @@
-"""Generate a Gaussian difference kernel and apply it to a grayscale image."""
-
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
 from typing import TypedDict, cast
 
-import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import NDArray
 from PIL import Image
@@ -47,7 +44,6 @@ def G_np(
     B: float = 1.5,
     C: float = 0.5,
 ) -> NDArray[np.float64]:
-    """Evaluate the assignment's Gaussian difference function on a grid."""
     line_spread = (
         A * np.exp(-((xs / sigma_1) ** 2))
         - B * np.exp(-((xs / sigma_2) ** 2))
@@ -59,7 +55,6 @@ def G_np(
 def generate_grid_from_angle(
     theta: float, samples: int
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """Rotate sampling coordinates while keeping the output grid fixed."""
     xs, ys = np.meshgrid(
         np.linspace(*X_RANGE, samples),
         np.linspace(*Y_RANGE, samples),
@@ -82,21 +77,15 @@ def generate_kernel(
     B: float = 1.5,
     C: float = 0.5,
 ) -> NDArray[np.float64]:
-    """Sample G and normalize its sum to one for image convolution."""
-    if samples < 3 or samples % 2 == 0:
-        raise ValueError("The kernel needs an odd sample count of at least three.")
     xs, ys = generate_grid_from_angle(theta, samples)
     kernel = G_np(xs, ys, sigma_y, sigma_1, sigma_2, sigma_3, A, B, C)
     total = kernel.sum()
-    if abs(total) <= 1e-6 * max(np.abs(kernel).sum(), 1e-12):
-        raise ValueError("Kernel sum is near zero. Adjust amplitudes or widths.")
     return kernel / total
 
 
 def convolve_image_with_kernel(
     kernel: NDArray[np.float64], image: NDArray[np.float64]
 ) -> NDArray[np.float64]:
-    """Convolve an image with symmetric padding and retain its original size."""
     pad_y, pad_x = kernel.shape[0] // 2, kernel.shape[1] // 2
     padded = np.pad(image, ((pad_y, pad_y), (pad_x, pad_x)), mode="symmetric")
     return cast(NDArray[np.float64], fftconvolve(padded, kernel, mode="valid"))
@@ -105,14 +94,12 @@ def convolve_image_with_kernel(
 def convolve_image_with_all_orientations(
     image: NDArray[np.float64], params: KernelParameters
 ) -> list[OrientationResult]:
-    """Return one kernel and response map for each tangent orientation."""
     results = []
     for index in range(ORIENTATION_COUNT):
         theta = index * np.pi / ORIENTATION_COUNT
         kernel = generate_kernel(theta=theta, **params)
         response = convolve_image_with_kernel(kernel, image)
         results.append(OrientationResult(index, theta, kernel, response))
-
     return results
 
 
@@ -120,43 +107,47 @@ def softmax_results(
     results: list[OrientationResult],
     temperature: float = 1.0,
 ) -> NDArray[np.float64]:
-    if temperature <= 0:
-        raise ValueError("temperature must be positive")
-
     responses = np.stack([r.response for r in results], axis=0)
     # Shape: (16, height, width)
     return softmax(responses / temperature, axis=0)
 
 
 def load_greyscale_img(path: str | PathLike[str]) -> NDArray[np.float64]:
-    """Read an image as grayscale values between zero and one."""
     with Image.open(path) as source:
         return np.asarray(source.convert("L"), dtype=np.float64) / 255.0
 
 
 def save_greyscale_img(image: NDArray[np.float64], path: str | PathLike[str]) -> None:
-    """Save grayscale values as an 8-bit PNG."""
-    pixels = np.round(np.clip(image, 0.0, 1.0) * 255).astype(np.uint8)
+    pixels = np.round(np.clip(image, 0.0, 1.0) * 255).astype(np.uint8) # 8-bit png.
     Image.fromarray(pixels).save(path)
 
 
-def main() -> None:
-    curves_dir = Path("curves")
-    image_path = curves_dir / "fingerprint.png"
-    image = load_greyscale_img(image_path)
-    kernel_params = KernelParameters(
-        sigma_y=1.0,
-        sigma_1=  0.8,
-        sigma_2=  0.3,
-        sigma_3= 0.8,
-        A= 0.5,
-        B=1.5,
-        C=0.5,
-        samples=101,
-    )
-    or_res = convolve_image_with_all_orientations(image, kernel_params)
-    softmax_results(or_res)
+def tangent_segments(
+    results: list[OrientationResult],
+    probabilities: np.ndarray,
+    threshold: float,
+    spacing: int,
+) -> np.ndarray:
+    segments = []
+    half_length = max(3.0, spacing * 0.75)
+    for item, assignments in zip(results, probabilities):
+        rows, cols = np.nonzero(assignments[::spacing, ::spacing] > threshold)
+        centers = np.column_stack((cols * spacing, rows * spacing))
+        # The kernel's vertical axis rotates in sampling coordinates. Convert
+        # that direction to image pixels, accounting for unequal grid ranges.
+        direction = np.array(
+            [
+                -np.sin(item.angle_radians) / (X_RANGE[1] - X_RANGE[0]),
+                np.cos(item.angle_radians) / (Y_RANGE[1] - Y_RANGE[0]),
+            ]
+        )
+        offset = half_length * direction / np.linalg.norm(direction)
+        segments.append(np.stack((centers - offset, centers + offset), axis=1))
+    return np.concatenate(segments) if segments else np.empty((0, 2, 2))
 
+
+def main():
+    pass
 
 if __name__ == "__main__":
     main()
