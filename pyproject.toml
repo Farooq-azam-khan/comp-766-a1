@@ -15,4 +15,4 @@ typeCheckingMode = "standard"
 pythonVersion = "3.13"
 venvPath = "."
 venv = ".venv"
-include = ["main.py", "convolution.py", "convolution_ui.py"]
+include = ["main.py", "convolution.py", "convolution_ui.py", "support_generation.py", "support_ui.py"]

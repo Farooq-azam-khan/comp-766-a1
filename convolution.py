@@ -122,26 +122,25 @@ def save_greyscale_img(image: NDArray[np.float64], path: str | PathLike[str]) ->
     Image.fromarray(pixels).save(path)
 
 
+def tangent_angles(rotations: NDArray[np.float64]) -> NDArray[np.float64]:
+    return np.arctan2(
+        np.cos(rotations) / (Y_RANGE[1] - Y_RANGE[0]),
+        -np.sin(rotations) / (X_RANGE[1] - X_RANGE[0]),
+    ) % np.pi
+
+
 def tangent_segments(
-    results: list[OrientationResult],
-    probabilities: np.ndarray,
+    angles: NDArray[np.float64],
+    probabilities: NDArray[np.float64],
     threshold: float,
     spacing: int,
-) -> np.ndarray:
+) -> NDArray[np.float64]:
     segments = []
     half_length = max(3.0, spacing * 0.75)
-    for item, assignments in zip(results, probabilities):
+    for angle, assignments in zip(angles, probabilities):
         rows, cols = np.nonzero(assignments[::spacing, ::spacing] > threshold)
         centers = np.column_stack((cols * spacing, rows * spacing))
-        # The kernel's vertical axis rotates in sampling coordinates. Convert
-        # that direction to image pixels, accounting for unequal grid ranges.
-        direction = np.array(
-            [
-                -np.sin(item.angle_radians) / (X_RANGE[1] - X_RANGE[0]),
-                np.cos(item.angle_radians) / (Y_RANGE[1] - Y_RANGE[0]),
-            ]
-        )
-        offset = half_length * direction / np.linalg.norm(direction)
+        offset = half_length * np.array([np.cos(angle), np.sin(angle)])
         segments.append(np.stack((centers - offset, centers + offset), axis=1))
     return np.concatenate(segments) if segments else np.empty((0, 2, 2))
 

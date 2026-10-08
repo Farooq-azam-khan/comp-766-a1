@@ -24,6 +24,7 @@ from convolution import (
     convolve_image_with_all_orientations,
     save_greyscale_img,
     softmax_results,
+    tangent_angles,
     tangent_segments,
 )
 
@@ -403,7 +404,8 @@ class ConvolutionUI:
         threshold = float(self.vector_threshold.val)
         spacing = int(self.vector_spacing.val)
         self.vector_segments = tangent_segments(
-            self.results, self.probabilities, threshold, spacing
+            tangent_angles(np.array([item.angle_radians for item in self.results])),
+            self.probabilities, threshold, spacing,
         )
         self.vector_artist.set_segments(self.vector_segments)
         self.original_ax.set_title(

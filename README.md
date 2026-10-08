@@ -50,3 +50,35 @@ changes only the displayed pixels; the `.npy` responses keep their raw values.
 Every export also saves `initial_tangents.png`, the full per-pixel probability
 array `assignments.npy` with shape `(16, height, width)`, and the threshold,
 temperature, and vector spacing in the manifest.
+
+Compute support and compare the tangent overlays with:
+
+```sh
+uv run python support_ui.py
+uv run python support_ui.py curves/fingerprint.png --radius 7 --classes 7
+```
+
+To reuse tuned initial estimates, add `--assignments path/to/assignments.npy`.
+The assignment array must match the input image dimensions.
+Adjust the initial threshold, support threshold, and vector spacing in the preview.
+The supported overlay starts with the same initial candidates as the blue overlay
+and keeps those that clear the support threshold. Uncheck **Initial candidates only**
+to inspect every tangent hypothesis with enough raw support.
+The support overlay divides raw support by its global maximum for display.
+Its starting threshold selects approximately the strongest 10% of pixel maxima.
+The heatmap shows raw support.
+Click **Save results** to export the preview, raw support, winning curvature classes,
+and parameters to `output/support/<image-name>/`. Use `--save-only` to export without
+opening a window. These generated files are ignored by Git.
+
+`generate_support()` returns support and curvature classes, each shaped
+`(16, height, width)`. It initializes curvature estimates with a first pass,
+then applies mutual curvature-class membership. Pass the previous class array
+as `curvature_classes=` on later relaxation iterations. The default seven signed
+curvature bins span `-0.2` to `0.2` inverse pixels, excluding radii below five pixels.
+The straight-curvature bin uses a one-pixel transverse displacement at the
+neighborhood boundary, capped at half the maximum curvature. At the default radius
+of five pixels, its limits are `-0.08` and `0.08`. The remaining bins partition the
+negative and positive curvature ranges. Use an odd number of classes to retain a
+central straight-curvature bin.
+Use `--max-curvature` to change that limit.
