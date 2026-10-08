@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from os import PathLike
-from pathlib import Path
 from typing import TypedDict, cast
 
 import numpy as np
