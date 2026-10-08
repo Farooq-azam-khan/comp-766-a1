@@ -1,2 +1,3 @@
 __pycache__
 .DS_Store
+curves/*_orientations/*/assignments.npy
