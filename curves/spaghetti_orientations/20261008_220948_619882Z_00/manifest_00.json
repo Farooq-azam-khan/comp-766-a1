@@ -1,0 +1,43 @@
+{
+  "source": "curves/spaghetti.png",
+  "parameters": {
+    "samples": 101,
+    "sigma_y": 1.0,
+    "sigma_1": 0.8,
+    "sigma_2": 0.3,
+    "sigma_3": 0.8,
+    "A": 0.5,
+    "B": 1.5,
+    "C": 0.5
+  },
+  "orientations": [
+    {
+      "index": 0,
+      "angle_degrees": 0.0
+    }
+  ],
+  "angle_reference": "0 degrees is the vertical kernel",
+  "display_range": [
+    0.8295416642421154,
+    1.0000000000000004
+  ],
+  "auto_contrast": true,
+  "kernel_normalization": "sum to one",
+  "image_padding": "symmetric",
+  "initial_assignments": {
+    "normalization": "softmax across all 16 orientations at each pixel",
+    "temperature": 0.02,
+    "vector_threshold": 0.2,
+    "threshold_comparison": "strictly greater than",
+    "vector_spacing_pixels": 4,
+    "vectors_drawn": 7658,
+    "overlay": "initial_tangents.png",
+    "probabilities": "assignments.npy",
+    "probability_axes": [
+      "orientation",
+      "row",
+      "column"
+    ]
+  },
+  "raw_data": "Matching *_kernel.npy and *_response.npy files"
+}
