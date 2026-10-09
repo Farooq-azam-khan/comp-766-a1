@@ -82,3 +82,38 @@ of five pixels, its limits are `-0.08` and `0.08`. The remaining bins partition 
 negative and positive curvature ranges. Use an odd number of classes to retain a
 central straight-curvature bin.
 Use `--max-curvature` to change that limit.
+
+Run relaxation labeling with:
+
+```sh
+uv run python relaxation_labeling.py curves/fingerprint.png --iterations 5
+uv run python relaxation_labeling.py curves/fingerprint.png --iterations 5 --save-only
+```
+
+Add `--assignments path/to/assignments.npy` to reuse tuned Part I estimates.
+The preview shows initial tangents, relaxed tangents, and average local support
+at iteration zero and after each update. `--threshold` controls the final overlay,
+`--initial-threshold` controls the initial overlay, and `--spacing` sets vector spacing.
+Results save to `output/relaxation/<image-name>/`, including the preview, initial
+and final assignments, final raw support, curvature classes, and a manifest with
+parameters, support scores, and maximum confidence changes.
+
+`relax_labels()` reuses the Part II support calculation and carries curvature
+classes between iterations. Each orientation competes with its own no-line label
+using Appendix A's radial update, so multiple orientations can survive a crossing.
+Final confidences stay in `[0, 1]`; they are not renormalized across orientations.
+`average_local_support()` computes the assignment's sum `A(p) = sum(p * s)`.
+The plot divides this sum by the number of pixels.
+
+The signed support is `(s - support_min) / (support_max - support_min)`.
+By default, `support_max = 2 * radius`, the support of a unit-confidence horizontal
+line through the neighborhood, and `support_min = 0.25 * support_max`, following
+Eq. 6.15 with a minimum line confidence of 0.5. This is a simple reference scale;
+it does not compensate for orientation-dependent pixel counts. Set `--support-min`
+and `--support-max` to tune it. Support below the minimum suppresses a tangent.
+`--step-size` controls the update strength and `--tolerance` stops updates when the
+maximum confidence change is small. The curvature-class maximum and changing
+classes mean the support score need not increase at every iteration.
+The existing default convolution parameters give weak ridge estimates on the
+fingerprint image. Reuse tuned Part I assignments for ridge detection; relaxation
+can also reinforce the finger boundary if it has the strongest initial estimates.
