@@ -68,8 +68,8 @@ def relax_labels(
     probabilities = np.asarray(probabilities, dtype=np.float64).copy()
     # A unit-confidence straight line through a radius-r neighborhood has 2r neighbors.
     support_max = float(2 * radius if support_max is None else support_max)
-    # Eq. 6.15 with minimum line confidence 0.5: s_min = 0.5 * s_max / 2.
-    support_min = float(0.25 * support_max if support_min is None else support_min)
+    # Eq. 6.15 with minimum line confidence 0.6: s_min = 0.6 * s_max / 2.
+    support_min = float(0.3 * support_max if support_min is None else support_min)
     offsets = support_offsets(angles, radius, curvature_edges, c_min)
     class_count = len(curvature_edges) - 1
     _, classes = accumulate_support(probabilities, offsets, class_count, None)
@@ -92,11 +92,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("image", nargs="?", type=Path, default=Path("curves/fingerprint.png"))
     parser.add_argument("--assignments", type=Path)
+    parser.add_argument("--samples", type=int, default=31)
     parser.add_argument("--radius", type=int, default=5)
     parser.add_argument("--classes", type=int, default=7)
     parser.add_argument("--max-curvature", type=float, default=0.2)
     parser.add_argument("--c-min", type=float, default=0.1)
-    parser.add_argument("--temperature", type=float, default=0.02)
+    parser.add_argument("--temperature", type=float, default=0.005)
     parser.add_argument("--iterations", type=int, default=5)
     parser.add_argument("--step-size", type=float, default=1.0)
     parser.add_argument("--tolerance", type=float, default=1e-4)
@@ -110,31 +111,45 @@ def main() -> None:
     args = parser.parse_args()
     if not np.isfinite(args.temperature) or args.temperature <= 0:
         parser.error("Temperature must be finite and positive.")
+    if args.samples < 3 or args.samples % 2 == 0:
+        parser.error("Kernel samples must be an odd number of at least 3.")
     if args.radius < 1 or args.classes < 1 or args.classes % 2 == 0:
         parser.error("Radius must be positive and classes must be a positive odd number.")
     if not np.isfinite(args.max_curvature) or args.max_curvature <= 0:
         parser.error("Maximum curvature must be finite and positive.")
     if args.spacing < 1 or not 0 <= args.threshold <= 1 or not 0 <= args.initial_threshold <= 1:
         parser.error("Spacing must be positive and display thresholds between 0 and 1.")
+    support_max = float(2 * args.radius if args.support_max is None else args.support_max)
+    support_min = float(0.3 * support_max if args.support_min is None else args.support_min)
+    if not np.all(np.isfinite([support_min, support_max])) or not 0 <= support_min < support_max:
+        parser.error("Support limits must be finite with 0 <= min < max.")
+    if not np.all(np.isfinite([args.step_size, args.tolerance, args.c_min])) or (
+        args.iterations < 0 or args.step_size <= 0 or args.tolerance < 0 or not 0 <= args.c_min <= 1
+    ):
+        parser.error("Use nonnegative iterations and tolerance, a positive step, and c_min between 0 and 1.")
     angles = tangent_angles(np.arange(ORIENTATION_COUNT, dtype=np.float64) * np.pi / ORIENTATION_COUNT)
     edges = default_curvature_edges(args.radius, args.max_curvature, args.classes)
+    params = DEFAULT_KERNEL_PARAMETERS.copy()
+    params["samples"] = args.samples
     try:
         with Image.open(args.image) as source:
             original = np.asarray(source.convert("RGB"), dtype=np.uint8)
             image = np.asarray(source.convert("L"), dtype=np.float64) / 255.0
         if args.assignments is None:
-            convolutions = convolve_image_with_all_orientations(image, DEFAULT_KERNEL_PARAMETERS)
+            convolutions = convolve_image_with_all_orientations(image, params)
             initial = softmax_results(convolutions, temperature=args.temperature)
             del convolutions
         else:
             initial = np.load(args.assignments, allow_pickle=False).astype(np.float64, copy=False)
         if initial.shape != (ORIENTATION_COUNT, *image.shape):
             raise ValueError("Assignments must have shape (16, image height, image width).")
+        if not np.all(np.isfinite(initial)) or np.any((initial < 0) | (initial > 1)):
+            raise ValueError("Assignments must be finite confidences between 0 and 1.")
         print("Running relaxation labeling...", flush=True)
         result = relax_labels(
             initial, angles, args.radius, edges, iterations=args.iterations,
             step_size=args.step_size, tolerance=args.tolerance,
-            support_min=args.support_min, support_max=args.support_max, c_min=args.c_min,
+            support_min=support_min, support_max=support_max, c_min=args.c_min,
         )
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
@@ -167,7 +182,7 @@ def main() -> None:
     metadata = {
         "source": str(args.image),
         "assignments": str(args.assignments) if args.assignments else None,
-        "kernel_parameters": DEFAULT_KERNEL_PARAMETERS if args.assignments is None else None,
+        "kernel_parameters": params if args.assignments is None else None,
         "temperature": args.temperature if args.assignments is None else None,
         "neighborhood_radius": args.radius,
         "curvature_edges": edges.tolist(), "c_min": args.c_min,

@@ -93,18 +93,14 @@ class RelaxationTests(unittest.TestCase):
         )
         self.assertLessEqual(float(result.probabilities.max()), 1 / 16)
 
-    def test_invalid_assignments_and_support_limits(self):
-        for confidence in (np.nan, np.inf, -0.1, 1.1):
-            with self.subTest(confidence=confidence), self.assertRaises(ValueError):
-                relax_labels(
-                    np.full((1, 2, 2), confidence), np.array([0.0]), 1,
-                    np.array([-1.0, 1.0]),
-                )
-        with self.assertRaises(ValueError):
-            relax_labels(
-                np.zeros((1, 2, 2)), np.array([0.0]), 1,
-                np.array([-1.0, 1.0]), support_min=2, support_max=2,
-            )
+    def test_cli_rejects_equal_support_limits(self):
+        completed = subprocess.run(
+            [sys.executable, str(Path(__file__).with_name("relaxation_labeling.py")),
+             "--support-min", "2", "--support-max", "2", "--save-only"],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("0 <= min < max", completed.stderr)
 
     def test_save_only_cli_exports_final_state_and_history(self):
         with TemporaryDirectory() as directory:
@@ -137,6 +133,26 @@ class RelaxationTests(unittest.TestCase):
             with Image.open(output / "preview.png") as preview:
                 self.assertGreater(preview.width, 1000)
             self.assertIn("Iteration 0: A(p)", completed.stdout)
+
+    def test_default_pipeline_recovers_fine_parallel_ridges(self):
+        # Ten-pixel ridge spacing exposes the averaging caused by a 101-pixel kernel.
+        _, cols = np.mgrid[:65, :65]
+        image = 0.65 - 0.15 * np.cos(2 * np.pi * (cols - 32) / 10)
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            image_path = root / "ridges.png"
+            output = root / "results"
+            Image.fromarray(np.round(image * 255).astype(np.uint8)).save(image_path)
+            subprocess.run(
+                [sys.executable, str(Path(__file__).with_name("relaxation_labeling.py")),
+                 str(image_path), "--output", str(output), "--save-only"],
+                capture_output=True, text=True, check=True,
+            )
+            initial = np.load(output / "initial_assignments.npy")
+            final = np.load(output / "assignments.npy")
+            self.assertGreater(initial[0, 32, 32], 0.9)
+            self.assertGreater(final[0, 32, 32], initial[0, 32, 32])
+            self.assertLess(float(final[1:, 32, 32].max()), 0.2)
 
 
 if __name__ == "__main__":

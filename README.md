@@ -91,6 +91,10 @@ uv run python relaxation_labeling.py curves/fingerprint.png --iterations 5 --sav
 ```
 
 Add `--assignments path/to/assignments.npy` to reuse tuned Part I estimates.
+Without saved assignments, this command uses a 31-pixel kernel and softmax
+temperature 0.005 to resolve the fingerprint's fine ridges. Use `--samples` and
+`--temperature` to adjust these for another image. The convolution UI keeps its
+own defaults.
 The preview shows initial tangents, relaxed tangents, and average local support
 at iteration zero and after each update. `--threshold` controls the final overlay,
 `--initial-threshold` controls the initial overlay, and `--spacing` sets vector spacing.
@@ -107,13 +111,10 @@ The plot divides this sum by the number of pixels.
 
 The signed support is `(s - support_min) / (support_max - support_min)`.
 By default, `support_max = 2 * radius`, the support of a unit-confidence horizontal
-line through the neighborhood, and `support_min = 0.25 * support_max`, following
-Eq. 6.15 with a minimum line confidence of 0.5. This is a simple reference scale;
+line through the neighborhood, and `support_min = 0.3 * support_max`, following
+Eq. 6.15 with a minimum line confidence of 0.6. This is a simple reference scale;
 it does not compensate for orientation-dependent pixel counts. Set `--support-min`
 and `--support-max` to tune it. Support below the minimum suppresses a tangent.
 `--step-size` controls the update strength and `--tolerance` stops updates when the
 maximum confidence change is small. The curvature-class maximum and changing
 classes mean the support score need not increase at every iteration.
-The existing default convolution parameters give weak ridge estimates on the
-fingerprint image. Reuse tuned Part I assignments for ridge detection; relaxation
-can also reinforce the finger boundary if it has the strongest initial estimates.
