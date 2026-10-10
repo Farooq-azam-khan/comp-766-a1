@@ -10,7 +10,7 @@
 \setlength{\parskip}{5pt}
 \newcommand{\asset}[2]{\includegraphics[width=#1\linewidth]{#2}}
 \title{COMP 766 assignment 1\\Curve inference with relaxation labeling}
-\author{} % Add your name and student ID here.
+\author{Farooq A. Khan} % Add your name and student ID here.
 \date{October 9, 2026}
 \begin{document}
 \maketitle
@@ -358,14 +358,7 @@ update are approximately $0.51$, $0.51$, and $0.43$ for spaghetti, fingerprint,
 and hair. None of the runs meets the $10^{-4}$ stopping tolerance.
 
 \subsection{Local behavior}
-\begin{figure}[!htbp]
-\centering
-\asset{0.78}{spaghetti_detail.png}\\[3pt]
-\asset{0.78}{fingerprint_detail.png}\\[3pt]
-\asset{0.78}{hair_detail.png}
-\caption{Initial, supported, and relaxed central crops. Rows are spaghetti, fingerprint, and hair. The $128\times128$ regions start at $(536,348)$, $(192,192)$, and $(256,256)$ in column-row coordinates, respectively. Vectors are sampled every 2 pixels.}
-\label{fig:details}
-\end{figure}
+
 
 Spaghetti shows the clearest visual improvement. Vectors follow the strands
 more consistently, and many conflicting directions disappear. Both strand
@@ -378,13 +371,11 @@ but the central crop still has gaps and isolated horizontal fragments. Hair's
 vectors increasingly follow the main diagonal direction, yet spread across
 wide bands and some dark gaps between strands.
 
-\section{Limitations of Assumptions}
+\section{Limitations of assumptions}
 
 Recovering a bifurcation would require linking an incoming curve to its
 outgoing branches. The implementation does not link tangents into curves,
-and the fingerprint image has no annotated bifurcations. The crossing test
-therefore demonstrates retention of two directions, without establishing
-branch recovery.
+and the fingerprint image has no annotated bifurcations.
 
 Additionally, the radius of 5 pixels limits how far support can bridge a gap. Endpoints
 and image boundaries have fewer supporting neighbors and can lose confidence.
@@ -402,21 +393,9 @@ or missing neighbors at image boundaries. Updating orientations independently
 allows crossings to survive, but can also strengthen several nearby or
 incorrect directions at once.
 
-\section{AI tools and reproducibility}
+\section{AI tools}
 Codex assisted with code organization, debugging, simplification, parameter
 tuning, figure generation, report editing, LaTeX compilation, and layout checks.
 
 
-\begin{thebibliography}{9}
-\bibitem{parent1989}
-P. Parent and S. W. Zucker.
-\textit{Trace Inference, Curvature Consistency, and Curve Detection}.
-IEEE Transactions on Pattern Analysis and Machine Intelligence,
-11(8):823--839, 1989.
-\bibitem{hummel1983}
-R. A. Hummel and S. W. Zucker.
-\textit{On the Foundations of Relaxation Labeling Processes}.
-IEEE Transactions on Pattern Analysis and Machine Intelligence,
-PAMI-5(3):267--287, 1983.
-\end{thebibliography}
 \end{document}
