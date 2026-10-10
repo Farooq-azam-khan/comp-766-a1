@@ -1,5 +1,11 @@
 __pycache__
 .DS_Store
-curves/*_orientations/*/assignments.npy
+src/curves/*_orientations/
 output/support/
 output/relaxation/
+src/output/
+.ruff_cache/
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
