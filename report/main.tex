@@ -215,8 +215,7 @@ curvature-consistency factors. Curvature signs are interpreted relative to the
 chosen tangent and chord directions, rather than by requiring equal signed
 class indices at opposite endpoints.
 
-Initially no winning classes are available. An ungated pass omits the second
-indicator to estimate them; a second pass then computes class-consistent support.
+Initially no winning classes are available. A second pass then computes class-consistent support.
 During relaxation, each pass uses classes from the preceding pass and selects
 new winners. A hypothesis with zero support is marked class $-1$.
 
@@ -244,12 +243,7 @@ have fewer possible supporting neighbors than interior pixels.
 \label{fig:support}
 \end{figure}
 
-For these overlays only, raw support is divided by its global maximum. The
-threshold is the 90th percentile of normalized per-pixel support maxima, rounded
-to two decimals. A displayed tangent must also have initial confidence above
-0.20. This produces an image-specific display criterion, not an assertion that
-exactly 10\% of candidates survive. Raw support is retained for relaxation.
-
+The support, much like the kernel, is normalized by its global maximum.
 Support retains 6,231 of 8,685 sampled spaghetti candidates, or 71.7\%. Most
 strand-aligned tracks remain while many transverse vectors at intersections
 are removed. In fingerprint, only 2,213 of 14,319 candidates remain, or 15.5\%.
