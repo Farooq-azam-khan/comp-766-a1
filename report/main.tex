@@ -17,24 +17,24 @@
 \vspace{-2em}
 
 \section{Approach}
-The implementation of trace inference construction of Parent and Zucker~\cite{parent1989}
-and the relaxation framework of Hummel and Zucker~\cite{hummel1983} are used on three images.
-The three stages of curve inference were applied as follows.
-The original image was grey-scaled and a convolution was applied.
-The kernel was generated via a gaussian.
-The rotation matrix was used to rotate the kernel and generate 16 convolved image yielding the orientation for each pixel.
-Given such values for tangents, the properties of cocirculatrigy and curvature consistency were used to measure their support.
-Radial relaxtation was further used to update them.
+This report applies the curve inference method of Parent and
+Zucker~\cite{parent1989} using the relaxation framework of Hummel and
+Zucker~\cite{hummel1983}. Each image is converted to grayscale and convolved
+with a Gaussian-based line template at 16 rotations. The responses give
+initial tangent confidences. Cocircularity and curvature consistency measure
+how well neighboring tangents support each other, and radial relaxation
+updates the confidences.
 
-The examples used are spaghetti, fingerprint, and
-hair. Spaghetti gives a relatively clear test of curve crossings.
-Fingerprint has changing orientation while the hair image combines strands of different widths with highlights, shadows, and dense parallel structure.
+The three images are spaghetti, fingerprint, and hair. Spaghetti has clear
+strands and crossings. Fingerprint has fine, low-contrast ridges that change
+direction. Hair combines strands of different widths with highlights,
+shadows, and closely spaced parallel curves.
 
 \begin{table}[!htbp]
 \centering\small
 \begin{tabular}{ll}
 \toprule
-Parameter \\
+Parameter & Value \\
 \midrule
 Kernel rotations & $\theta_n=n\cdot \pi/16$, $n=0,\ldots,15$ \\
 Kernel sampling & $31\times31$ on $[-2,2]\times[-2.5,2.5]$ \\
@@ -49,24 +49,27 @@ Overlay thresholds & Initial $p>0.20$ and $p>0.50$, final $p>0.50$ \\
 Overlay spacing & 4 pixels in full views, 2 pixels in crops \\
 \bottomrule
 \end{tabular}
-\caption{All Param values used.}
+\caption{Parameters used for all three images.}
 \label{tab:parameters}
 \end{table}
 
 \section{Part I: initial tangent estimates}
 \subsection{Measurement model and normalization}
-For each $\theta_n$, sampling coordinates are rotated as
+The line template combines three Gaussian terms across the line, weighted by
+$A$, $-B$, and $C$, with a Gaussian envelope along it. We sample the template
+on a $31\times31$ grid. For each $\theta_n$, the sampling coordinates are rotated as
 $(x',y')=(x\cos\theta_n+y\sin\theta_n,-x\sin\theta_n+y\cos\theta_n)$.
-The resulting kernel is normalized by its discrete sum to help control the intensity scaling introduced by the filter.
-Convolution was applied with this kernel using symmetric image padding.
-This helps remove artificial black borders and keeps the original image consistent.
+Each kernel is divided by the sum of its sampled values, giving it a total
+weight of one. Convolution uses symmetric padding, which mirrors pixels at
+the image edges instead of introducing a black border.
 
 If $f_i(n)$ denotes the response for orientation $n$, initialization is
 \begin{equation}
 p_i^{(0)}(n)=\frac{\exp(f_i(n)/\tau)}{\sum_{m=0}^{15}\exp(f_i(m)/\tau)}.
 \label{eq:softmax}
 \end{equation}
-Softmax is evaluated with a numerically stable library implementation and the temperature is used as another tunable parameter.
+The temperature $\tau=0.005$ controls how strongly the largest responses
+dominate the initial confidences. The code uses SciPy's softmax function.
 
 \subsection{Orientation in image coordinates}
 The reference kernel is vertical. Its tangent in continuous sampling coordinates
@@ -77,10 +80,10 @@ spacings are $\Delta x=4/30$ and $\Delta y=5/30$, so its image-pixel angle is
                               \frac{-\sin\theta_n}{\Delta x}\right)\bmod\pi.
 \label{eq:angles}
 \end{equation}
-Rows increase downward, matching the displayed image coordinates. Using these
-angles for both vectors and support keeps the geometry consistent with the
-sampled kernels. A consequence is that the 16 pixel-space angles are not uniformly
-spaced, although the specified kernel rotations are uniform.
+Image rows increase downward. Both the displayed vectors and the support
+calculation use $\phi_n$. Because the horizontal and vertical sample spacings
+differ, equally spaced kernel rotations produce unevenly spaced tangent
+angles in image pixels.
 
 \begin{figure}[!htbp]
 \centering
@@ -96,7 +99,7 @@ spaced, although the specified kernel rotations are uniform.
 \asset{0.32}{spaghetti_initial_p05.png}\hfill
 \asset{0.32}{fingerprint_initial_p05.png}\hfill
 \asset{0.32}{hair_initial_p05.png}
-\caption{The same initial estimates displayed at $p>0.50$, with spaghetti, fingerprint, and hair from left to right. Only the display threshold changes; the probabilities and 4-pixel spacing are unchanged.}
+\caption{Initial estimates at $p>0.50$ for spaghetti, fingerprint, and hair, from left to right. The probabilities and 4-pixel spacing are the same as in Figure~\ref{fig:initial}.}
 \label{fig:initial-p05}
 \end{figure}
 
@@ -105,28 +108,28 @@ Increasing the display threshold from $p>0.20$ (Figure~\ref{fig:initial}) to
 $p>0.50$ (Figure~\ref{fig:initial-p05}) reduces the displayed vectors from
 8,685 to 2,794 for spaghetti, 14,319 to 790 for fingerprint, and 17,979 to
 2,689 for hair, removing many competing directions.
-Spaghetti retains clear tangent tracks along most strands, while fingerprint
-and hair become sparser, with gaps where no orientation exceeds the higher threshold.
+Spaghetti retains vectors along most strands. Fingerprint and hair become
+sparser, with gaps where no orientation exceeds the higher threshold.
 Since the initial probabilities sum to one at each pixel, $p>0.50$ permits at
-most one displayed orientation per sampled pixel, although a high confidence
-alone does not establish that its direction is correct. Thus, the latter value is used.
+most one displayed orientation per sampled pixel. Both thresholds are shown
+to distinguish the competing initial directions from the strongest responses.
 
-Spaghetti already has recognizable tangents, but crossings and endpoints
-produce fans of conflicting directions. The negative central lobe also makes
-boundaries and darker portions of the bright strands influential, rather than
-consistently locating each strand's centerline. Fingerprint and hair have much
-denser conflicting estimates. In the fingerprint crop, ridge-aligned vertical
-vectors coexist with transverse vectors. In hair, many vectors follow the
-prevailing diagonal direction, but other directions appear across the strands.
+Spaghetti's initial vectors mostly follow the strands, but crossings and
+endpoints have many conflicting directions. The template's negative center
+also produces responses along boundaries and darker parts of the bright
+strands. Fingerprint and hair contain more conflicting estimates. In the
+fingerprint crop, some vectors follow the vertical ridges while others point
+across them. Many hair vectors follow the main diagonal direction, with
+additional vectors pointing across the strands.
 
 \section{Part II: cocircularity and curvature consistency}
 \subsection{Cocircularity compatibility}
-Following Parent and Zucker~\cite{parent1989}, two unit tangents $\lambda$ and
-$\lambda'$ are cocircular when a circle is tangent to both at their respective
-positions. Collinear tangents are the limiting case of infinite radius.
-Their orientations are denoted $\theta_\lambda$ and $\theta_{\lambda'}$;
-these are the image-coordinate angles $\phi_\lambda$ and $\phi_{\lambda'}$
-from Part I, rather than the kernel rotation angles.
+Two tangents are cocircular if the same circle is tangent to both at their
+positions~\cite{parent1989}. Tangents on the same straight line are the
+limiting case of infinite radius. Here $\lambda$ and $\lambda'$ label the
+tangent directions. To match the paper's notation, their angles are written
+as $\theta_\lambda$ and $\theta_{\lambda'}$, using the image angles
+$\phi_\lambda$ and $\phi_{\lambda'}$ from Part I.
 
 For pixels $(x_i,y_i)$ and $(x_j,y_j)$, define
 \begin{equation}
@@ -134,7 +137,7 @@ For pixels $(x_i,y_i)$ and $(x_j,y_j)$, define
 d_{ij}=\sqrt{\Delta x^2+\Delta y^2},\qquad
 \theta_{ij}=\arctan(\Delta y/\Delta x).
 \end{equation}
-Here $\theta_{ij}$ is the orientation of the line joining the pixels, as in
+The angle $\theta_{ij}$ describes the line joining the pixels, as in
 the paper's Equation (5.1). The code evaluates it using
 $\operatorname{atan2}(\Delta y,\Delta x)\bmod\pi$ to handle vertical lines.
 The paper's signed interior-angle function is
@@ -158,14 +161,14 @@ discrete condition, Equation (5.5):
 \epsilon=\frac{\pi}{16},\quad \alpha=\arcsin(1/d_{ij}).
 \label{eq:cocircularity}
 \end{equation}
-The term $\epsilon$ allows for orientation discretization, while $2\alpha$
-allows for uncertainty in the joining line when each tangent position varies
-within a radius-$1/2$ pixel circle. Integer offsets exclude $i=j$, so
-$d_{ij}\geq1$.
+The tolerance $\epsilon$ accounts for sampled orientations. The term
+$2\alpha$ accounts for uncertainty in the joining line when each tangent's
+position can vary within half a pixel. The target pixel is excluded from its
+own neighborhood, so $d_{ij}\geq1$.
 
-\textbf{Assumption: simplified cocircularity coefficient.}
-The implementation replaces the gradual falloff in the paper's Figure 9 and
-Equation (5.6) with a step function:
+The paper's Figure 9 and Equation (5.6) reduce compatibility gradually
+outside the accepted angular range. The implementation simplifies this to
+a step function:
 \begin{equation}
 c_{ij}(\lambda,\lambda')=
 \begin{cases}
@@ -173,34 +176,50 @@ c_{ij}(\lambda,\lambda')=
 c_{\min}=0.1, & \text{otherwise}.
 \end{cases}
 \end{equation}
-Thus, all pairs outside the accepted angular tolerance receive the same weak
-compatibility, regardless of how far they depart from cocircularity.
-The sloping transition regions shown in the paper's figure are not implemented.
+Every pair outside the tolerance receives compatibility $0.1$, regardless
+of its angular error. This gives those pairs weak support without the
+paper's gradual transition.
 
 \subsection{Curvature classes and support}
-For a candidate tangent $\phi$ at $i$, the signed curvature of the circle through
-$j$ tangent at $i$ is
+Curvature classes separate support for nearly straight curves from support for
+curves bending in either direction. For a tangent with orientation $\phi$ at
+pixel $i$, consider the circle tangent to it that passes through neighbor $j$.
+The implementation computes its signed curvature as
 \begin{equation}
 \kappa_{ij}(\phi)=
 \frac{2(\cos\phi\,\Delta y-\sin\phi\,\Delta x)}{d_{ij}^2}.
 \label{eq:curvature}
 \end{equation}
-The seven bin edges are
+Its magnitude is the reciprocal of the circle's radius; zero curvature means
+a straight line. This formula follows from the radius estimate in the paper's
+Equation (5.7), with a sign assigned according to the tangent and displacement
+directions used in the code.
+
+The implementation uses seven curvature classes with the following boundaries,
+computed from its neighborhood radius and maximum-curvature defaults:
 \begin{equation}
 (-0.20,-0.16,-0.12,-0.08,0.08,0.12,0.16,0.20).
 \end{equation}
-The central bin represents approximately straight structure. Its limit is
-$\min(2/r^2,\kappa_{\max}/2)=0.08$, based on a one-pixel transverse displacement
-at the neighborhood boundary. The remaining bins divide the negative and
-positive ranges evenly. The cutoff $|\kappa|\leq0.2$ excludes circular radii below
-5 pixels. Intervals are left-closed and right-open, except that the final endpoint
-is included. Out-of-range curvature receives class $-1$ and contributes no
-class-supported evidence.
+These eight boundaries define one central class and three classes on each side.
+The central class, $[-0.08,0.08)$, groups straight lines and gentle bends.
+Its width comes from the heuristic
+$\min(2/r^2,\kappa_{\max}/2)$, with $r=5$ and $\kappa_{\max}=0.2$.
+The term $2/r^2$ is the curvature given by Equation~\eqref{eq:curvature}
+when a neighbor at distance $r$ lies one pixel away from the tangent line.
+The other classes divide each remaining range into equal intervals of width
+$0.04$. Curvatures outside $[-0.2,0.2]$ are excluded, so circles with radii
+below 5 pixels provide no support. Each interval includes its lower boundary
+and excludes its upper boundary, except that $0.2$ is included in the last class.
 
-Let $b_{ij}(\lambda)$ be the bin of $\kappa_{ij}(\phi_\lambda)$ and let
-$k_j(\lambda')$ be a previously estimated winning class at $j$. In the reversed
-chord direction, $b_{ji}(\lambda')$ bins $-\kappa_{ij}(\phi_{\lambda'})$.
-The implemented class-specific support is
+For each tangent, support is summed separately within each class.
+A neighboring tangent contributes only if its previously selected class also
+contains the target pixel. This is the curvature-consistency check in
+Section V-D: both tangents must agree that the other lies in their expected
+curve region.
+
+Let $b_{ij}(\lambda)$ denote the class implied by tangent $\lambda$ at $i$
+and neighbor $j$, and let $k_j(\lambda')$ denote the previously selected class
+of tangent $\lambda'$ at $j$. The support is
 \begin{align}
 S_{ik}(\lambda)&=\sum_{j\in N_r(i)}\sum_{\lambda'}
  c_{ij}(\lambda,\lambda')\,
@@ -210,26 +229,26 @@ s_i(\lambda)&=\max_k S_{ik}(\lambda),\qquad
 k_i(\lambda)=\operatorname*{arg\,max}_k S_{ik}(\lambda).
 \label{eq:support}
 \end{align}
-This is a discrete mutual-membership version of the paper's curvature-class and
-curvature-consistency factors. Curvature signs are interpreted relative to the
-chosen tangent and chord directions, rather than by requiring equal signed
-class indices at opposite endpoints.
+The first indicator places the neighbor in class $k$ of the target tangent.
+The second checks that the target belongs to the neighbor's selected class.
+The largest class support becomes $s_i(\lambda)$, and its class becomes
+$k_i(\lambda)$. For the reverse check, the code swaps $i$ and $j$, reversing
+the displacement and hence the curvature sign. It therefore checks membership
+in both directions rather than requiring identical class indices.
 
-Initially no winning classes are available. A second pass then computes class-consistent support.
-During relaxation, each pass uses classes from the preceding pass and selects
-new winners. A hypothesis with zero support is marked class $-1$.
+The first pass selects classes without the curvature-consistency check because
+no previous estimates exist. A second pass uses those estimates to compute
+consistent support. During relaxation, each pass uses the preceding pass's
+classes. Excluded curvatures and tangents with zero support receive class $-1$.
 
-\subsection{Neighborhood detection for local support}
-For each pixel, the 80 neighboring positions within a radius of 5 pixels are taken.
-This keeps support local and reduces interference from distant curves.
-For each candidate tangent direction, we calculate support separately for each curvature class and keep the largest score.
-This avoids combining evidence for incompatible curve shapes.
- The output therefore contains local curve directions across the strand’s width rather than a single thin centerline.
+\subsection{Local support neighborhood}
+Each pixel receives support from the 80 other pixel positions within a
+radius of 5 pixels. Neighbors outside the image are skipped, leaving fewer
+supporting neighbors at image boundaries.
 
-The compatibility scores and curvature-class memberships for each relative neighbor position are pre-computed.
-Matrix operations combine the neighbors’ orientation scores, while processing blocks of rows limits temporary memory use.
-At image edges, we ignore neighboring positions that fall outside the image.
-Pixels cannot receive support from themselves or from the opposite image edge, so boundary pixels have fewer available supporting neighbors than interior pixels.
+The code precomputes compatibility coefficients and curvature classes for
+each neighbor offset. Matrix operations sum the neighboring confidences,
+and processing blocks of rows limits memory use.
 
 \subsection{Support results}
 \begin{figure}[!htbp]
@@ -241,18 +260,23 @@ Pixels cannot receive support from themselves or from the opposite image edge, s
 \label{fig:support}
 \end{figure}
 
-The support, much like the kernel, is normalized by its global maximum.
-Support retains 6,231 of 8,685 sampled spaghetti candidates, or 71.7\%. Most
-strand-aligned tracks remain while many transverse vectors at intersections
-are removed. In fingerprint, only 2,213 of 14,319 candidates remain, or 15.5\%.
-The central crop loses much of its transverse clutter, but also loses portions
-of visually plausible ridge tangents. In hair, 3,243 of 17,979 remain, or 18.0\%,
-with a clearer preference for the dominant strand direction.
+For the support overlays, each image's support values are divided by their
+global maximum. Only candidates with initial confidence $p>0.20$ are eligible
+for display. The display threshold is the 90th percentile of the normalized
+maximum support at each pixel, rounded to two decimal places. This scaling
+is used for visualization; relaxation uses raw support.
 
-These reductions reflect both geometric support and a deliberately selective
-display threshold. They do not establish an accuracy rate. Strong support may
-also occur along the finger boundary, shadows, or adjacent parallel strands,
-which are locally coherent without necessarily being the intended curves.
+At these thresholds, 6,231 of 8,685 sampled spaghetti candidates remain,
+or 71.7\%. Most vectors along the strands remain, while many vectors pointing
+across them at intersections disappear. Fingerprint retains 2,213 of 14,319
+candidates, or 15.5\%. Its central crop loses many vectors across the ridges,
+but also loses some plausible ridge directions. Hair retains 3,243 of 17,979
+candidates, or 18.0\%, mostly along the main strand direction.
+
+The retained counts depend on both support and the display thresholds.
+The overlays also retain vectors along the finger boundary, shadows, and
+neighboring parallel strands, where local agreement can occur outside the
+curves of interest.
 
 \section{Part III: radial relaxation labeling}
 \subsection{Update rule and reference scale}
@@ -260,33 +284,37 @@ The support score is
 \begin{equation}
 A(p)=\sum_i\sum_\lambda p_i(\lambda)s_i(\lambda).
 \end{equation}
-Plots divide this sum by the number of pixels $N$, allowing images of different
-sizes to be compared. Raw support is mapped to signed evidence as
+The plots show $A(p)/N$, where $N$ is the number of image pixels, to account
+for differences in image size. Before each update, raw support is converted
+to signed evidence:
 \begin{equation}
 q_i(\lambda)=\frac{s_i(\lambda)-s_{\min}}{s_{\max}-s_{\min}}.
 \end{equation}
-The reference $s_{\max}=2r=10$ is the support of a unit-confidence horizontal
-line through the neighborhood. Using a minimum line confidence of 0.6 gives
-$s_{\min}=0.6s_{\max}/2=3$, following the endpoint argument in Eq.~6.15 of
-Parent and Zucker~\cite{parent1989}. This is a fixed reference, not a measured
-upper bound: support can exceed it and $q$ is not clipped to $[-1,1]$.
+The reference $s_{\max}=2r=10$ comes from a horizontal line with confidence
+one, which has ten supporting neighbors in this neighborhood. Following the
+endpoint argument in Equation (6.15) of Parent and Zucker~\cite{parent1989},
+a minimum line confidence of $0.6$ gives $s_{\min}=0.6s_{\max}/2=3$.
+Raw support can exceed $s_{\max}$, and the code does not clip $q$ to $[-1,1]$.
 
-Each orientation has its own tangent versus no-line pair $[p,1-p]$, with evidence
-$[q,-q]$. Subtracting its minimum gives nonnegative evidence
-$[2\max(q,0),2\max(-q,0)]$. Adding a step of this evidence and normalizing the
-pair yields the binary radial rule from Appendix A of the trace inference paper:
+Each orientation is updated independently as a pair: tangent confidence $p$
+and no-line confidence $1-p$. Their evidence values are $q$ and $-q$.
+Subtracting the smaller evidence value from both gives
+$[2\max(q,0),2\max(-q,0)]$. Adding $\eta$ times these values to the confidence
+pair and dividing by its new sum gives the radial rule from Appendix A of
+the trace inference paper:
 \begin{equation}
 p^{(t+1)}=\frac{p^{(t)}+2\eta\max(q,0)}{1+2\eta|q|}.
 \label{eq:update}
 \end{equation}
-Positive $q$ strengthens a tangent, negative $q$ weakens it, and $q=0$ preserves
-it. Valid input confidences remain in $[0,1]$. Orientations are not renormalized
-against one another after initialization, so multiple directions can survive a
-crossing and their confidences can sum to more than one.
+Positive $q$ raises the tangent confidence, negative $q$ lowers it, and
+$q=0$ leaves it unchanged. Each confidence stays in $[0,1]$. After
+initialization, orientations no longer share a sum-to-one constraint, so
+multiple directions can survive at a crossing.
 
-After each update, support is recomputed using the preceding curvature classes.
-The run stops after five updates or when the maximum absolute confidence change
-is at most $10^{-4}$. All three images reached the five-update limit.
+After each update, the code recomputes support using the preceding curvature
+classes and selects new classes. The run stops after five updates or when
+the largest absolute confidence change is at most $10^{-4}$. All three
+images reached the five-update limit.
 
 \begin{figure}[!htbp]
 \centering
@@ -309,33 +337,25 @@ is at most $10^{-4}$. All three images reached the five-update limit.
 \label{fig:hair-relaxation}
 \end{figure}
 
-\begin{table}[!htbp]
-\centering\small\input{assets/results_table.tex}
-\caption{Sampled vector counts and support per pixel. Supported counts use the image-specific thresholds in Figure~\ref{fig:support}. Counts at different thresholds are not direct measures of improvement.}
-\label{tab:results}
-\end{table}
-
 \begin{figure}[!htbp]
 \centering\asset{0.65}{support_history.png}
 \caption{Average local support per pixel over five updates for spaghetti, fingerprint, and hair.}
 \label{fig:history}
 \end{figure}
 
+\begin{minipage}{\linewidth}
 \section{Results after five updates}
 \subsection{Support histories}
 Spaghetti's support per pixel falls from 1.049 to 0.820 on the first update, then
 rises to 2.270 by update five. Fingerprint falls slightly from 1.391 to 1.363,
 then reaches 5.192. Hair increases from 1.610 to 7.005. The final scores are
 approximately 2.16, 3.73, and 4.35 times their initial values, respectively.
+\end{minipage}
 
-\begin{samepage}
-Five updates give substantially higher support than initialization
-(Figure~\ref{fig:history}) and clearer tangent tracks in the displayed results.
-We use five as a practical limit for this report. Support is still rising, so
-the plot does not establish convergence or an optimal stopping point.
-Higher support alone does not prove more accurate curve localization.
-
-\end{samepage}
+Five updates were used as a practical limit. Support is still rising in
+Figure~\ref{fig:history}, and the largest confidence changes on the fifth
+update are approximately $0.51$, $0.51$, and $0.43$ for spaghetti, fingerprint,
+and hair. None of the runs meets the $10^{-4}$ stopping tolerance.
 
 \subsection{Local behavior}
 \begin{figure}[!htbp]
@@ -347,81 +367,45 @@ Higher support alone does not prove more accurate curve localization.
 \label{fig:details}
 \end{figure}
 
-Spaghetti has the clearest visual improvement. Tangents follow the strands more
-consistently and many fans of transverse vectors disappear. Directions associated
-with intersecting strands remain visible near the central crossing. However,
-multiple nearly parallel tracks persist across strand widths; there is no
-centerline selection or explicit reconstruction of which strand passes over
-another.
+Spaghetti shows the clearest visual improvement. Vectors follow the strands
+more consistently, and many conflicting directions disappear. Both strand
+directions remain visible near the central crossing. Several parallel rows
+of vectors still span each strand's width because the method does not select
+a single centerline or determine which strand passes over the other.
 
-Fingerprint retains a more organized tangent field along the upper and right-hand
-ridge patterns, but the central crop remains incomplete. Several plausible
-vertical ridge tangents survive, while gaps and isolated horizontal fragments
-remain. Hair increasingly favors the main diagonal direction, yet detections
-spread across wide bands and some dark gaps between strands. Local consistency
-improves directional organization without guaranteeing that every surviving
-vector lies on a distinct physical strand.
+Fingerprint's vectors follow the upper and right-hand ridges more consistently,
+but the central crop still has gaps and isolated horizontal fragments. Hair's
+vectors increasingly follow the main diagonal direction, yet spread across
+wide bands and some dark gaps between strands.
 
-\section{Crossings, assumptions, and limitations}
-\subsection{Controlled crossing}
-\begin{figure}[!htbp]
-\centering\asset{0.88}{synthetic_crossing.png}
-\caption{A controlled crossing and an isolated tangent. The separate test configuration uses radius 3, one curvature class with edges $[-0.05,0.05]$, $c_{\min}=0$, support limits 1 and 6, and five updates.}
-\label{fig:crossing}
-\end{figure}
-The synthetic example begins with confidence 0.7 on each of two perpendicular
-lines and 0.8 on a separate isolated tangent. After five updates, both crossing
-confidences are approximately 0.998, while the isolated confidence is 0.149.
-This verifies that the update can preserve two supported directions at the same
-pixel while suppressing an unsupported one. The example starts from assigned
-confidences and does not test the convolution stage or identify physical strands
-at an occlusion.
+\section{Limitations of Assumptions}
 
-A bifurcation requires more than preserving two orientations: one incoming trace
-must connect plausibly to its outgoing branches. The fingerprint examples do not
-provide annotated bifurcations or a trace-linking stage, so successful branch
-recovery is not established. The real spaghetti crossing and the controlled test
-support a narrower conclusion about retaining multiple tangent hypotheses.
+Recovering a bifurcation would require linking an incoming curve to its
+outgoing branches. The implementation does not link tangents into curves,
+and the fingerprint image has no annotated bifurcations. The crossing test
+therefore demonstrates retention of two directions, without establishing
+branch recovery.
 
-\subsection{Consequences of the simplifying assumptions}
-The finite radius keeps support local, but also limits gap bridging and penalizes
-endpoints or image boundaries with fewer neighbors. Seven curvature classes
-provide a coarse local shape model; their broad central bin tolerates nearly
-straight structure, while the maximum-curvature cutoff can reject tight bends.
-The fixed cocircularity tolerance also approximates quantization even though
-pixel-space angles are nonuniform after the sampling-scale correction.
+Additionally, the radius of 5 pixels limits how far support can bridge a gap. Endpoints
+and image boundaries have fewer supporting neighbors and can lose confidence.
 
-A single filter scale cannot simultaneously match thin ridges and wide strands.
-The selected negative-center template can respond to dark grooves or strand
-boundaries rather than bright centerlines. Strong directional structure can
-therefore survive in the wrong spatial location. Omitting lateral maxima
-selection leaves duplicate tracks and broad tangent bands. These effects are
-especially visible in hair and spaghetti.
+A single filter size cannot match both thin ridges and wide strands. The
+template's negative center can respond to dark grooves and strand boundaries,
+placing vectors away from the intended centerline. The implementation omits
+the paper's lateral maxima selection, leaving several parallel rows of
+vectors across strands. These effects are especially visible in hair and
+spaghetti.
 
-The support reference scale is based on a horizontal ideal line, without adjusting
-for orientation-dependent lattice counts, local contrast, or truncated
-neighborhoods. Independent binary labels preserve crossings, but permit several
-nearby or incorrect directions to accumulate confidence together. Finally, five
-updates are enough to inspect the mechanism, not enough to establish convergence.
-
-The strongest result is suppression of conflicting directions followed by more
-coherent tangent tracks. The weakest result is precise localization in dense,
-low-contrast patterns. There are no annotated traces or orientation labels for
-these inputs, so precision, recall, and angular error are not reported. The
-vector counts and support histories are internal measurements, accompanied by
-visual inspection rather than treated as ground-truth accuracy.
-
-\section{Conclusion}
-Cocircularity and curvature consistency remove many ambiguous initial tangents,
-and radial relaxation strengthens locally compatible directions. Spaghetti shows
-clearer strand-aligned tracks after five updates; fingerprint and hair show
-stronger directional organization with remaining gaps, false fragments, and broad
-responses. The controlled crossing confirms that independent tangent labels can
-retain two supported directions. Higher support alone does not prove accurate
-curve recovery, and none of the reported real-image runs has converged.
+The support reference uses an ideal horizontal line. It does not adjust for
+the number of grid pixels encountered at other orientations, local contrast,
+or missing neighbors at image boundaries. Updating orientations independently
+allows crossings to survive, but can also strengthen several nearby or
+incorrect directions at once.
 
 \section{AI tools and reproducibility}
-Codex assisted with code organization and simplification, figure generation, LaTeX compilation, layout checks.
+Codex assisted with code organization, debugging, simplification, parameter
+tuning, figure generation, report editing, LaTeX compilation, and layout checks.
+
 
 \begin{thebibliography}{9}
 \bibitem{parent1989}
