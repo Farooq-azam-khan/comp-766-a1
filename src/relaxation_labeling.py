@@ -9,6 +9,8 @@ from PIL import Image
 
 from convolution import (
     DEFAULT_KERNEL_PARAMETERS,
+    FINAL_VECTOR_COLOR,
+    INITIAL_VECTOR_COLOR,
     ORIENTATION_COUNT,
     convolve_image_with_all_orientations,
     softmax_results,
@@ -17,6 +19,7 @@ from convolution import (
 )
 from support_generation import (
     accumulate_support,
+    consistent_support,
     default_curvature_edges,
     support_offsets,
 )
@@ -72,8 +75,7 @@ def relax_labels(
     support_min = float(0.3 * support_max if support_min is None else support_min)
     offsets = support_offsets(angles, radius, curvature_edges, c_min)
     class_count = len(curvature_edges) - 1
-    _, classes = accumulate_support(probabilities, offsets, class_count, None)
-    support, classes = accumulate_support(probabilities, offsets, class_count, classes)
+    support, classes = consistent_support(probabilities, offsets, class_count)
     scores = [average_local_support(probabilities, support)]
     changes = []
     for _ in range(iterations):
@@ -81,16 +83,27 @@ def relax_labels(
         updated = radial_update(probabilities, signed_support, step_size)
         changes.append(float(np.max(np.abs(updated - probabilities))))
         probabilities = updated
-        support, classes = accumulate_support(probabilities, offsets, class_count, classes)
+        support, classes = accumulate_support(
+            probabilities, offsets, class_count, classes
+        )
         scores.append(average_local_support(probabilities, support))
         if changes[-1] <= tolerance:
             break
-    return RelaxationResult(probabilities, support, classes, scores, changes, support_min, support_max)
+    return RelaxationResult(
+        probabilities, support, classes, scores, changes, support_min, support_max
+    )
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("image", nargs="?", type=Path, default=Path(__file__).parent / "curves/fingerprint.png")
+    parser = argparse.ArgumentParser(
+        description="Run relaxation labeling and save arrays and a preview."
+    )
+    parser.add_argument(
+        "image",
+        nargs="?",
+        type=Path,
+        default=Path(__file__).parent / "curves/fingerprint.png",
+    )
     parser.add_argument("--assignments", type=Path)
     parser.add_argument("--samples", type=int, default=31)
     parser.add_argument("--radius", type=int, default=5)
@@ -109,7 +122,9 @@ def main() -> None:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--save-only", action="store_true")
     args = parser.parse_args()
-    angles = tangent_angles(np.arange(ORIENTATION_COUNT, dtype=np.float64) * np.pi / ORIENTATION_COUNT)
+    angles = tangent_angles(
+        np.arange(ORIENTATION_COUNT, dtype=np.float64) * np.pi / ORIENTATION_COUNT
+    )
     edges = default_curvature_edges(args.radius, args.max_curvature, args.classes)
     params = DEFAULT_KERNEL_PARAMETERS.copy()
     params["samples"] = args.samples
@@ -121,12 +136,21 @@ def main() -> None:
         initial = softmax_results(convolutions, temperature=args.temperature)
         del convolutions
     else:
-        initial = np.load(args.assignments, allow_pickle=False).astype(np.float64, copy=False)
+        initial = np.load(args.assignments, allow_pickle=False).astype(
+            np.float64, copy=False
+        )
     print("Running relaxation labeling...", flush=True)
     result = relax_labels(
-        initial, angles, args.radius, edges, iterations=args.iterations,
-        step_size=args.step_size, tolerance=args.tolerance,
-        support_min=args.support_min, support_max=args.support_max, c_min=args.c_min,
+        initial,
+        angles,
+        args.radius,
+        edges,
+        iterations=args.iterations,
+        step_size=args.step_size,
+        tolerance=args.tolerance,
+        support_min=args.support_min,
+        support_max=args.support_max,
+        c_min=args.c_min,
     )
 
     import matplotlib
@@ -139,8 +163,20 @@ def main() -> None:
     fig, axes = plt.subplots(1, 3, figsize=(16, 6))
     fig.suptitle(f"Relaxation labeling: {args.image.name}")
     for ax, probabilities, threshold, title, color in (
-        (axes[0], initial, args.initial_threshold, "Initial tangents", "#2563eb"),
-        (axes[1], result.probabilities, args.threshold, "Relaxed tangents", "#e11d48"),
+        (
+            axes[0],
+            initial,
+            args.initial_threshold,
+            "Initial tangents",
+            INITIAL_VECTOR_COLOR,
+        ),
+        (
+            axes[1],
+            result.probabilities,
+            args.threshold,
+            "Relaxed tangents",
+            FINAL_VECTOR_COLOR,
+        ),
     ):
         ax.imshow(original)
         segments = tangent_segments(angles, probabilities, threshold, args.spacing)
@@ -149,7 +185,11 @@ def main() -> None:
         ax.axis("off")
     per_pixel_scores = np.asarray(result.average_support) / image.size
     axes[2].plot(np.arange(len(per_pixel_scores)), per_pixel_scores, marker="o")
-    axes[2].set(xlabel="Iteration", ylabel="A(p) / number of pixels", title="Average local support")
+    axes[2].set(
+        xlabel="Iteration",
+        ylabel="A(p) / number of pixels",
+        title="Average local support",
+    )
     axes[2].grid(alpha=0.25)
     fig.tight_layout()
 
@@ -160,15 +200,21 @@ def main() -> None:
         "kernel_parameters": params if args.assignments is None else None,
         "temperature": args.temperature if args.assignments is None else None,
         "neighborhood_radius": args.radius,
-        "curvature_edges": edges.tolist(), "c_min": args.c_min,
-        "iterations_requested": args.iterations, "iterations_completed": len(result.max_changes),
-        "step_size": args.step_size, "tolerance": args.tolerance,
-        "support_min": result.support_min, "support_max": result.support_max,
+        "curvature_edges": edges.tolist(),
+        "c_min": args.c_min,
+        "iterations_requested": args.iterations,
+        "iterations_completed": len(result.max_changes),
+        "step_size": args.step_size,
+        "tolerance": args.tolerance,
+        "support_min": result.support_min,
+        "support_max": result.support_max,
         "average_local_support": result.average_support,
         "average_local_support_per_pixel": per_pixel_scores.tolist(),
         "max_confidence_changes": result.max_changes,
-        "initial_threshold": args.initial_threshold, "threshold": args.threshold,
-        "vector_spacing": args.spacing, "tangent_angles_radians": angles.tolist(),
+        "initial_threshold": args.initial_threshold,
+        "threshold": args.threshold,
+        "vector_spacing": args.spacing,
+        "tangent_angles_radians": angles.tolist(),
         "array_axes": ["orientation", "row", "column"],
         "label_model": "independent tangent versus no-line at each orientation",
     }

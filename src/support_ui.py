@@ -11,6 +11,8 @@ from PIL import Image
 
 from convolution import (
     DEFAULT_KERNEL_PARAMETERS,
+    FINAL_VECTOR_COLOR,
+    INITIAL_VECTOR_COLOR,
     ORIENTATION_COUNT,
     convolve_image_with_all_orientations,
     softmax_results,
@@ -37,43 +39,70 @@ class SupportUI:
         self.curvature_classes = curvature_classes
         maximum = float(support.max())
         self.display_support = support / maximum if maximum > 0 else support.copy()
-        default_threshold = round(float(np.clip(
-            np.percentile(self.display_support.max(axis=0), 90), 0.01, 0.99
-        )), 2)
+        default_threshold = round(
+            float(
+                np.clip(np.percentile(self.display_support.max(axis=0), 90), 0.01, 0.99)
+            ),
+            2,
+        )
         self.output = output
         self.metadata = metadata
         self.fig, self.axes = plt.subplots(1, 3, figsize=(16, 7))
-        self.fig.subplots_adjust(left=0.03, right=0.97, bottom=0.25, top=0.90, wspace=0.15)
+        self.fig.subplots_adjust(
+            left=0.03, right=0.97, bottom=0.25, top=0.90, wspace=0.15
+        )
         self.fig.suptitle(f"Cocircularity support · {metadata['source']}", fontsize=14)
         for ax in self.axes[:2]:
             ax.imshow(original)
-        self.initial_artist = LineCollection([], colors="#2563eb", linewidths=0.9)
-        self.support_artist = LineCollection([], colors="#e11d48", linewidths=0.9)
+        self.initial_artist = LineCollection(
+            [], colors=INITIAL_VECTOR_COLOR, linewidths=0.9
+        )
+        self.support_artist = LineCollection(
+            [], colors=FINAL_VECTOR_COLOR, linewidths=0.9
+        )
         self.axes[0].add_collection(self.initial_artist)
         self.axes[1].add_collection(self.support_artist)
-        heatmap = self.axes[2].imshow(support.max(axis=0), cmap="magma", vmin=0, vmax=max(maximum, 1e-12))
+        heatmap = self.axes[2].imshow(
+            support.max(axis=0), cmap="magma", vmin=0, vmax=max(maximum, 1e-12)
+        )
         self.axes[2].set_title("Maximum raw support across orientations")
         self.fig.colorbar(heatmap, ax=self.axes[2], fraction=0.046, pad=0.04)
         for ax in self.axes:
             ax.axis("off")
         self.initial_threshold = Slider(
             self.fig.add_axes((0.13, 0.16, 0.24, 0.025)),
-            "Initial threshold", 0.0, 1.0, valinit=0.2, valstep=0.01,
+            "Initial threshold",
+            0.0,
+            1.0,
+            valinit=0.2,
+            valstep=0.01,
         )
         self.support_threshold = Slider(
             self.fig.add_axes((0.60, 0.16, 0.24, 0.025)),
-            "Support threshold", 0.0, 1.0, valinit=default_threshold, valstep=0.01,
+            "Support threshold",
+            0.0,
+            1.0,
+            valinit=default_threshold,
+            valstep=0.01,
         )
         self.spacing = Slider(
             self.fig.add_axes((0.13, 0.08, 0.24, 0.025)),
-            "Vector spacing", 1, 16, valinit=4, valstep=1, valfmt="%d px",
+            "Vector spacing",
+            1,
+            16,
+            valinit=4,
+            valstep=1,
+            valfmt="%d px",
         )
         self.candidate_filter = CheckButtons(
             self.fig.add_axes((0.45, 0.065, 0.22, 0.06)),
-            ["Initial candidates only"], [True],
+            ["Initial candidates only"],
+            [True],
         )
         self.candidate_filter.on_clicked(self.refresh)
-        self.save_button = Button(self.fig.add_axes((0.70, 0.065, 0.14, 0.05)), "Save results")
+        self.save_button = Button(
+            self.fig.add_axes((0.70, 0.065, 0.14, 0.05)), "Save results"
+        )
         self.status = self.fig.text(0.03, 0.02, "", fontsize=9)
         for slider in (self.initial_threshold, self.support_threshold, self.spacing):
             slider.on_changed(self.refresh)
@@ -89,7 +118,8 @@ class SupportUI:
         candidates_only = self.candidate_filter.get_status()[0]
         displayed_support = (
             np.where(self.probabilities > initial_threshold, self.display_support, 0.0)
-            if candidates_only else self.display_support
+            if candidates_only
+            else self.display_support
         )
         support_segments = tangent_segments(
             self.angles, displayed_support, float(self.support_threshold.val), spacing
@@ -102,7 +132,8 @@ class SupportUI:
         )
         title = (
             f"Supported initial tangents · p > {initial_threshold:.2f}"
-            if candidates_only else "Support hypotheses"
+            if candidates_only
+            else "Support hypotheses"
         )
         self.axes[1].set_title(
             f"{title}\ns / global max > {self.support_threshold.val:.2f} · "
@@ -127,7 +158,9 @@ class SupportUI:
                 "initial_candidates_only": bool(self.candidate_filter.get_status()[0]),
                 "unsupported_curvature_class": -1,
             }
-            (self.output / "manifest.json").write_text(json.dumps(metadata, indent=2) + "\n")
+            (self.output / "manifest.json").write_text(
+                json.dumps(metadata, indent=2) + "\n"
+            )
             self.status.set_text(f"Saved to {self.output}")
             self.status.set_color("black")
             self.fig.savefig(self.output / "preview.png", dpi=150)
@@ -141,8 +174,15 @@ class SupportUI:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Compute and visualize cocircularity support.")
-    parser.add_argument("image", nargs="?", type=Path, default=Path(__file__).parent / "curves/spaghetti.png")
+    parser = argparse.ArgumentParser(
+        description="Compute and visualize cocircularity support."
+    )
+    parser.add_argument(
+        "image",
+        nargs="?",
+        type=Path,
+        default=Path(__file__).parent / "curves/spaghetti.png",
+    )
     parser.add_argument("--assignments", type=Path)
     parser.add_argument("--radius", type=int, default=5)
     parser.add_argument("--classes", type=int, default=7)
@@ -160,8 +200,12 @@ def main() -> None:
         results = convolve_image_with_all_orientations(image, params)
         probabilities = softmax_results(results, temperature=args.temperature)
     else:
-        probabilities = np.load(args.assignments, allow_pickle=False).astype(np.float64, copy=False)
-    angles = tangent_angles(np.arange(ORIENTATION_COUNT, dtype=np.float64) * np.pi / ORIENTATION_COUNT)
+        probabilities = np.load(args.assignments, allow_pickle=False).astype(
+            np.float64, copy=False
+        )
+    angles = tangent_angles(
+        np.arange(ORIENTATION_COUNT, dtype=np.float64) * np.pi / ORIENTATION_COUNT
+    )
     edges = default_curvature_edges(args.radius, args.max_curvature, args.classes)
     print("Computing cocircularity support...", flush=True)
     support, classes = generate_support(

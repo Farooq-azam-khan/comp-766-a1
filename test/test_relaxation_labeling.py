@@ -39,9 +39,14 @@ class RelaxationTests(unittest.TestCase):
         probabilities[0, 1, 1] = 0.8
         initial = probabilities.copy()
         result = relax_labels(
-            probabilities, np.array([0.0, np.pi / 2]), 3,
-            np.array([-0.05, 0.05]), iterations=5, c_min=0.0,
-            support_min=1.0, support_max=6.0,
+            probabilities,
+            np.array([0.0, np.pi / 2]),
+            3,
+            np.array([-0.05, 0.05]),
+            iterations=5,
+            c_min=0.0,
+            support_min=1.0,
+            support_max=6.0,
         )
         self.assertTrue(np.all(result.probabilities[:, 10, 10] > 0.9))
         self.assertLess(result.probabilities[0, 1, 1], 0.2)
@@ -53,8 +58,15 @@ class RelaxationTests(unittest.TestCase):
         angles = np.arange(4) * np.pi / 4
         edges = np.array([-2.0, -0.2, 0.2, 2.0])
         result = relax_labels(
-            initial, angles, 2, edges, iterations=3, tolerance=0.0,
-            step_size=0.5, support_min=1.0, support_max=4.0,
+            initial,
+            angles,
+            2,
+            edges,
+            iterations=3,
+            tolerance=0.0,
+            step_size=0.5,
+            support_min=1.0,
+            support_max=4.0,
         )
         probabilities = initial.copy()
         support, classes = generate_support(probabilities, angles, 2, edges)
@@ -65,7 +77,11 @@ class RelaxationTests(unittest.TestCase):
             changes.append(float(np.max(np.abs(updated - probabilities))))
             probabilities = updated
             support, classes = generate_support(
-                probabilities, angles, 2, edges, curvature_classes=classes,
+                probabilities,
+                angles,
+                2,
+                edges,
+                curvature_classes=classes,
             )
             scores.append(average_local_support(probabilities, support))
         np.testing.assert_allclose(result.probabilities, probabilities)
@@ -78,7 +94,10 @@ class RelaxationTests(unittest.TestCase):
         probabilities = np.zeros((1, 3, 3))
         for iterations, expected_steps in ((0, 0), (5, 1)):
             result = relax_labels(
-                probabilities, np.array([0.0]), 1, np.array([-1.0, 1.0]),
+                probabilities,
+                np.array([0.0]),
+                1,
+                np.array([-1.0, 1.0]),
                 iterations=iterations,
             )
             np.testing.assert_array_equal(result.probabilities, probabilities)
@@ -88,7 +107,10 @@ class RelaxationTests(unittest.TestCase):
     def test_default_threshold_suppresses_diffuse_initial_confidences(self):
         initial = np.full((16, 15, 15), 1 / 16)
         result = relax_labels(
-            initial, np.arange(16) * np.pi / 16, 5, default_curvature_edges(5),
+            initial,
+            np.arange(16) * np.pi / 16,
+            5,
+            default_curvature_edges(5),
             iterations=5,
         )
         self.assertLessEqual(float(result.probabilities.max()), 1 / 16)
@@ -105,21 +127,44 @@ class RelaxationTests(unittest.TestCase):
             initial[8, 5, :] = 0.7
             np.save(assignments_path, initial)
             completed = subprocess.run(
-                [sys.executable, str(Path(__file__).resolve().parents[1] / "src/relaxation_labeling.py"),
-                 str(image_path), "--assignments", str(assignments_path),
-                 "--radius", "2", "--classes", "1", "--iterations", "2",
-                 "--output", str(output), "--save-only"],
-                capture_output=True, text=True, check=True,
+                [
+                    sys.executable,
+                    str(
+                        Path(__file__).resolve().parents[1]
+                        / "src/relaxation_labeling.py"
+                    ),
+                    str(image_path),
+                    "--assignments",
+                    str(assignments_path),
+                    "--radius",
+                    "2",
+                    "--classes",
+                    "1",
+                    "--iterations",
+                    "2",
+                    "--output",
+                    str(output),
+                    "--save-only",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
             )
             metadata = json.loads((output / "manifest.json").read_text())
             final = np.load(output / "assignments.npy")
             support = np.load(output / "support.npy")
             self.assertEqual(metadata["iterations_completed"], 2)
             self.assertEqual(len(metadata["average_local_support"]), 3)
-            self.assertAlmostEqual(metadata["average_local_support"][-1],
-                                   average_local_support(final, support))
-            np.testing.assert_array_equal(np.load(output / "initial_assignments.npy"), initial)
-            self.assertEqual(np.load(output / "curvature_classes.npy").shape, initial.shape)
+            self.assertAlmostEqual(
+                metadata["average_local_support"][-1],
+                average_local_support(final, support),
+            )
+            np.testing.assert_array_equal(
+                np.load(output / "initial_assignments.npy"), initial
+            )
+            self.assertEqual(
+                np.load(output / "curvature_classes.npy").shape, initial.shape
+            )
             self.assertTrue(np.all((final >= 0) & (final <= 1)))
             with Image.open(output / "preview.png") as preview:
                 self.assertGreater(preview.width, 1000)
@@ -135,9 +180,20 @@ class RelaxationTests(unittest.TestCase):
             output = root / "results"
             Image.fromarray(np.round(image * 255).astype(np.uint8)).save(image_path)
             subprocess.run(
-                [sys.executable, str(Path(__file__).resolve().parents[1] / "src/relaxation_labeling.py"),
-                 str(image_path), "--output", str(output), "--save-only"],
-                capture_output=True, text=True, check=True,
+                [
+                    sys.executable,
+                    str(
+                        Path(__file__).resolve().parents[1]
+                        / "src/relaxation_labeling.py"
+                    ),
+                    str(image_path),
+                    "--output",
+                    str(output),
+                    "--save-only",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
             )
             initial = np.load(output / "initial_assignments.npy")
             final = np.load(output / "assignments.npy")

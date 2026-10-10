@@ -14,6 +14,7 @@ from PIL import Image
 
 from convolution import (
     DEFAULT_KERNEL_PARAMETERS,
+    INITIAL_VECTOR_COLOR,
     ORIENTATION_COUNT,
     X_RANGE,
     Y_RANGE,
@@ -26,9 +27,11 @@ from convolution import (
     tangent_segments,
 )
 
+
 def angle_label(index: int) -> str:
     """Label angles relative to the vertical reference kernel."""
     return f"{index * 180 / ORIENTATION_COUNT:g}°"
+
 
 @final
 class ConvolutionUI:
@@ -60,7 +63,7 @@ class ConvolutionUI:
         self.original_ax, gray_ax, self.kernel_ax, self.response_ax = axes
         self.original_ax.imshow(self.original)
         self.vector_artist = LineCollection(
-            [], colors="#2563eb", linewidths=0.9, alpha=0.95
+            [], colors=INITIAL_VECTOR_COLOR, linewidths=0.9, alpha=0.95
         )
         self.original_ax.add_collection(self.vector_artist)
         self.original_ax.set_title("Initial tangents on original")
@@ -161,17 +164,32 @@ class ConvolutionUI:
 
         self.vector_threshold = Slider(
             self.fig.add_axes((0.12, 0.405, 0.18, 0.022)),
-            "Vector threshold", 0.0, 1.0, valinit=0.2, valstep=0.01, valfmt="%.2f",
+            "Vector threshold",
+            0.0,
+            1.0,
+            valinit=0.2,
+            valstep=0.01,
+            valfmt="%.2f",
         )
         self.vector_threshold.on_changed(self.refresh_vectors)
         self.softmax_temperature = Slider(
             self.fig.add_axes((0.49, 0.405, 0.12, 0.022)),
-            "Softmax temp", 0.001, 0.1, valinit=0.02, valstep=0.001, valfmt="%.3f",
+            "Softmax temp",
+            0.001,
+            0.1,
+            valinit=0.02,
+            valstep=0.001,
+            valfmt="%.3f",
         )
         self.softmax_temperature.on_changed(self.refresh_assignments)
         self.vector_spacing = Slider(
             self.fig.add_axes((0.12, 0.132, 0.31, 0.018)),
-            "Vector spacing", 1, 16, valinit=4, valstep=1, valfmt="%d px",
+            "Vector spacing",
+            1,
+            16,
+            valinit=4,
+            valstep=1,
+            valfmt="%d px",
         )
         self.vector_spacing.on_changed(self.refresh_vectors)
 
@@ -229,9 +247,7 @@ class ConvolutionUI:
             ("Reset", 0.51, self.reset),
             ("Save view", 0.68, self.save),
         ):
-            button = Button(
-                self.fig.add_axes((x, 0.065, 0.14, 0.047)), label
-            )
+            button = Button(self.fig.add_axes((x, 0.065, 0.14, 0.047)), label)
             button.on_clicked(callback)
             self.buttons.append(button)
 
@@ -323,7 +339,9 @@ class ConvolutionUI:
         spacing = int(self.vector_spacing.val)
         self.vector_segments = tangent_segments(
             tangent_angles(np.array([item.angle_radians for item in self.results])),
-            self.probabilities, threshold, spacing,
+            self.probabilities,
+            threshold,
+            spacing,
         )
         self.vector_artist.set_segments(self.vector_segments)
         if len(self.vector_segments):
@@ -374,8 +392,10 @@ class ConvolutionUI:
         for ax in (self.kernel_ax, self.response_ax):
             ax.set_visible(not show_all)
         for artist in (
-            self.kernel_header, self.response_header,
-            *self.kernel_grid_axes, *self.response_grid_axes,
+            self.kernel_header,
+            self.response_header,
+            *self.kernel_grid_axes,
+            *self.response_grid_axes,
         ):
             artist.set_visible(show_all)
 
@@ -403,9 +423,14 @@ class ConvolutionUI:
         fig = plt.figure(figsize=(width / 100, height / 100), dpi=100)
         ax = fig.add_axes((0, 0, 1, 1))
         ax.imshow(self.original)
-        ax.add_collection(LineCollection(
-            self.vector_segments, colors="#2563eb", linewidths=0.9, alpha=0.95
-        ))
+        ax.add_collection(
+            LineCollection(
+                self.vector_segments,
+                colors=INITIAL_VECTOR_COLOR,
+                linewidths=0.9,
+                alpha=0.95,
+            )
+        )
         ax.axis("off")
         try:
             fig.savefig(path, dpi=100)

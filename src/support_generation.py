@@ -8,8 +8,10 @@ from convolution import ORIENTATION_COUNT
 
 type Position = Sequence[float] | NDArray[np.number]
 
+MAX_TILE_ELEMENTS = 8_000_000
 
-def gamma(beta: float, gamma: float) -> float:
+
+def interior_angle(beta: float, gamma: float) -> float:
     difference = gamma - beta
     if difference > np.pi / 2:
         return difference - np.pi
@@ -31,7 +33,10 @@ def is_cocircular(
     alpha = np.arcsin(1 / d_ij)
     theta_ij = float(np.arctan2(dy, dx) % np.pi)
     return bool(
-        np.abs(gamma(theta_lam, theta_ij) - gamma(theta_ij, theta_lam_prime))
+        np.abs(
+            interior_angle(theta_lam, theta_ij)
+            - interior_angle(theta_ij, theta_lam_prime)
+        )
         < epsilon + 2 * alpha
     )
 
@@ -57,7 +62,7 @@ def default_curvature_edges(
 ) -> NDArray[np.float64]:
     if class_count == 1:
         return np.array([-max_curvature, max_curvature])
-    straight_limit = min(2 / neighborhood_radius ** 2, max_curvature / 2)
+    straight_limit = min(2 / neighborhood_radius**2, max_curvature / 2)
     positive_edges = np.linspace(straight_limit, max_curvature, class_count // 2 + 1)
     return np.concatenate((-positive_edges[::-1], positive_edges))
 
@@ -105,15 +110,23 @@ def support_offsets(
                 1.0,
                 c_min,
             )
-            curvatures = 2 * (np.cos(angles) * dy - np.sin(angles) * dx) / distance_squared
+            curvatures = (
+                2 * (np.cos(angles) * dy - np.sin(angles) * dx) / distance_squared
+            )
             target_classes = classify_curvatures(curvatures, edges)
             neighbor_classes = classify_curvatures(-curvatures, edges)
             labels = np.flatnonzero(target_classes >= 0)
             if labels.size:
-                offsets.append(SupportOffset(
-                    dy, dx, labels, target_classes[labels], neighbor_classes,
-                    coefficients[labels],
-                ))
+                offsets.append(
+                    SupportOffset(
+                        dy,
+                        dx,
+                        labels,
+                        target_classes[labels],
+                        neighbor_classes,
+                        coefficients[labels],
+                    )
+                )
     return offsets
 
 
@@ -126,7 +139,9 @@ def accumulate_support(
     label_count, height, width = probabilities.shape
     support = np.zeros_like(probabilities)
     winning_classes = np.full(probabilities.shape, -1, dtype=np.int64)
-    tile_height = max(1, min(height, 8_000_000 // (class_count * label_count * width)))
+    tile_height = max(
+        1, min(height, MAX_TILE_ELEMENTS // (class_count * label_count * width))
+    )
     for row_start in range(0, height, tile_height):
         row_stop = min(height, row_start + tile_height)
         class_support = np.zeros(
@@ -150,8 +165,10 @@ def accumulate_support(
                 "ij,jyx->iyx", offset.coefficients, neighbors, optimize=True
             )
             class_support[
-                offset.target_classes, offset.labels,
-                y0 - row_start:y1 - row_start, x0:x1,
+                offset.target_classes,
+                offset.labels,
+                y0 - row_start : y1 - row_start,
+                x0:x1,
             ] += contribution
         best = class_support.max(axis=0)
         support[:, row_start:row_stop] = best
@@ -159,6 +176,19 @@ def accumulate_support(
             best > 0, class_support.argmax(axis=0), -1
         )
     return support, winning_classes
+
+
+def consistent_support(
+    probabilities: NDArray[np.float64],
+    offsets: list[SupportOffset],
+    class_count: int,
+    curvature_classes: NDArray[np.int64] | None = None,
+) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
+    if curvature_classes is None:
+        _, curvature_classes = accumulate_support(
+            probabilities, offsets, class_count, None
+        )
+    return accumulate_support(probabilities, offsets, class_count, curvature_classes)
 
 
 def generate_support(
@@ -170,12 +200,8 @@ def generate_support(
     curvature_classes: NDArray[np.int64] | None = None,
     c_min: float = 0.1,
 ) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
-    class_count = len(curvature_edges) - 1
     offsets = support_offsets(
         tangent_angles, neighborhood_radius, curvature_edges, c_min
     )
-    if curvature_classes is None:
-        _, curvature_classes = accumulate_support(
-            probabilities, offsets, class_count, None
-        )
-    return accumulate_support(probabilities, offsets, class_count, curvature_classes)
+    class_count = len(curvature_edges) - 1
+    return consistent_support(probabilities, offsets, class_count, curvature_classes)

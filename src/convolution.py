@@ -12,6 +12,9 @@ X_RANGE = (-2.0, 2.0)
 Y_RANGE = (-2.5, 2.5)
 ORIENTATION_COUNT = 16
 
+INITIAL_VECTOR_COLOR = "#2563eb"
+FINAL_VECTOR_COLOR = "#e11d48"
+
 
 class KernelParameters(TypedDict):
     samples: int
@@ -44,7 +47,7 @@ class OrientationResult:
     response: NDArray[np.float64]
 
 
-def G_np(
+def line_template(
     xs: NDArray[np.float64],
     ys: NDArray[np.float64],
     sigma_y: float = 1.0,
@@ -89,7 +92,7 @@ def generate_kernel(
     C: float = 0.5,
 ) -> NDArray[np.float64]:
     xs, ys = generate_grid_from_angle(theta, samples)
-    kernel = G_np(xs, ys, sigma_y, sigma_1, sigma_2, sigma_3, A, B, C)
+    kernel = line_template(xs, ys, sigma_y, sigma_1, sigma_2, sigma_3, A, B, C)
     total = kernel.sum()
     return kernel / total
 
@@ -129,15 +132,18 @@ def load_greyscale_img(path: str | PathLike[str]) -> NDArray[np.float64]:
 
 
 def save_greyscale_img(image: NDArray[np.float64], path: str | PathLike[str]) -> None:
-    pixels = np.round(np.clip(image, 0.0, 1.0) * 255).astype(np.uint8) # 8-bit png.
+    pixels = np.round(np.clip(image, 0.0, 1.0) * 255).astype(np.uint8)  # 8-bit PNG.
     Image.fromarray(pixels).save(path)
 
 
 def tangent_angles(rotations: NDArray[np.float64]) -> NDArray[np.float64]:
-    return np.arctan2(
-        np.cos(rotations) / (Y_RANGE[1] - Y_RANGE[0]),
-        -np.sin(rotations) / (X_RANGE[1] - X_RANGE[0]),
-    ) % np.pi
+    return (
+        np.arctan2(
+            np.cos(rotations) / (Y_RANGE[1] - Y_RANGE[0]),
+            -np.sin(rotations) / (X_RANGE[1] - X_RANGE[0]),
+        )
+        % np.pi
+    )
 
 
 def tangent_segments(
@@ -149,5 +155,7 @@ def tangent_segments(
     labels, rows, cols = np.nonzero(probabilities[:, ::spacing, ::spacing] > threshold)
     centers = np.column_stack((cols, rows)) * spacing
     half_length = max(3.0, spacing * 0.75)
-    offsets = half_length * np.column_stack((np.cos(angles[labels]), np.sin(angles[labels])))
+    offsets = half_length * np.column_stack(
+        (np.cos(angles[labels]), np.sin(angles[labels]))
+    )
     return np.stack((centers - offsets, centers + offsets), axis=1)

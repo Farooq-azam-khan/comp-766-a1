@@ -14,7 +14,10 @@ from convolution_ui import ConvolutionUI
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "image", nargs="?", type=Path, default=Path(__file__).parent / "curves/spaghetti.png"
+        "image",
+        nargs="?",
+        type=Path,
+        default=Path(__file__).parent / "curves/spaghetti.png",
     )
     args = parser.parse_args()
     ui = ConvolutionUI(args.image)  # Retain widget callbacks while the window is open.
