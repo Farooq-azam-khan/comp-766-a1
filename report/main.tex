@@ -63,6 +63,19 @@ Each kernel is divided by the sum of its sampled values, giving it a total
 weight of one. Convolution uses symmetric padding, which mirrors pixels at
 the image edges instead of introducing a black border.
 
+Figure~\ref{fig:kernels} shows the sampled reference kernel and all 16
+rotations. With these weights the template has a negative center between two
+positive flanks, so it responds most strongly to a narrow dark line with
+brighter surroundings.
+
+\begin{figure}[!htbp]
+\centering
+\asset{0.63}{kernel_surface.png}\hfill
+\asset{0.33}{kernels_all.png}
+\caption{Line template with the parameters in Table~\ref{tab:parameters}. Left: the $0^\circ$ reference kernel as a surface. Middle: its profile across the line at $y=0$. Right: all 16 rotated $31\times31$ kernels, with red positive and blue negative. Labels give the rotation $\theta_n$ in sampling coordinates; Section~\ref{sec:image-angles} converts it to an image angle.}
+\label{fig:kernels}
+\end{figure}
+
 If $f_i(n)$ denotes the response for orientation $n$, initialization is
 \begin{equation}
 p_i^{(0)}(n)=\frac{\exp(f_i(n)/\tau)}{\sum_{m=0}^{15}\exp(f_i(m)/\tau)}.
@@ -71,7 +84,7 @@ p_i^{(0)}(n)=\frac{\exp(f_i(n)/\tau)}{\sum_{m=0}^{15}\exp(f_i(m)/\tau)}.
 The temperature $\tau=0.005$ controls how strongly the largest responses
 dominate the initial confidences. The code uses SciPy's softmax function.
 
-\subsection{Orientation in image coordinates}
+\subsection{Orientation in image coordinates}\label{sec:image-angles}
 The reference kernel is vertical. Its tangent in continuous sampling coordinates
 is proportional to $(-\sin\theta,\cos\theta)$. Horizontal and vertical sample
 spacings are $\Delta x=4/30$ and $\Delta y=5/30$, so its image-pixel angle is
@@ -90,7 +103,7 @@ angles in image pixels.
 \asset{0.32}{spaghetti_initial.png}\hfill
 \asset{0.32}{fingerprint_initial.png}\hfill
 \asset{0.32}{hair_initial.png}
-\caption{Initial estimates for spaghetti, fingerprint, and hair, from left to right. Blue vectors mark $p>0.20$ at spacing 4 pixels. The enlarged views in Figure~\ref{fig:details} make competing directions easier to inspect.}
+\caption{Initial estimates for spaghetti, fingerprint, and hair, from left to right. Blue vectors mark $p>0.20$ at spacing 4 pixels.}
 \label{fig:initial}
 \end{figure}
 
@@ -126,10 +139,10 @@ additional vectors pointing across the strands.
 \subsection{Cocircularity compatibility}
 Two tangents are cocircular if the same circle is tangent to both at their
 positions~\cite{parent1989}. Tangents on the same straight line are the
-limiting case of infinite radius. Here $\lambda$ and $\lambda'$ label the
-tangent directions. To match the paper's notation, their angles are written
-as $\theta_\lambda$ and $\theta_{\lambda'}$, using the image angles
-$\phi_\lambda$ and $\phi_{\lambda'}$ from Part I.
+limiting case of infinite radius. Here $\lambda$ and $\lambda'$ index two
+of the 16 orientations. Following the paper, their angles are written
+$\theta_\lambda$ and $\theta_{\lambda'}$. These are the image-pixel angles
+$\phi$ from Equation~\eqref{eq:angles}, not the kernel rotations $\theta_n$.
 
 For pixels $(x_i,y_i)$ and $(x_j,y_j)$, define
 \begin{equation}
@@ -398,4 +411,16 @@ Codex assisted with code organization, debugging, simplification, parameter
 tuning, figure generation, report editing, LaTeX compilation, and layout checks.
 
 
+\begin{thebibliography}{9}
+\bibitem{parent1989}
+P. Parent and S. W. Zucker.
+\textit{Trace Inference, Curvature Consistency, and Curve Detection}.
+IEEE Transactions on Pattern Analysis and Machine Intelligence,
+11(8):823--839, 1989.
+\bibitem{hummel1983}
+R. A. Hummel and S. W. Zucker.
+\textit{On the Foundations of Relaxation Labeling Processes}.
+IEEE Transactions on Pattern Analysis and Machine Intelligence,
+PAMI-5(3):267--287, 1983.
+\end{thebibliography}
 \end{document}
