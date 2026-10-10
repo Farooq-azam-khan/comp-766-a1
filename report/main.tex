@@ -219,19 +219,17 @@ Initially no winning classes are available. A second pass then computes class-co
 During relaxation, each pass uses classes from the preceding pass and selects
 new winners. A hypothesis with zero support is marked class $-1$.
 
-\subsection{Neighborhood and computation}
-The neighborhood contains the 80 nonzero integer offsets inside a radius-5 disk.
-This limits support to nearby structure and avoids mixing distant curves. The
-maximum over classes favors one local curvature interpretation instead of
-summing incompatible interpretations. Lateral maxima selection is omitted, as
-specified in the assignment. This leaves multiple responses across a thick
-strand, so the output is a tangent field rather than a thinned centerline.
+\subsection{Neighborhood detection for local support}
+For each pixel, the 80 neighboring positions within a radius of 5 pixels are taken.
+This keeps support local and reduces interference from distant curves.
+For each candidate tangent direction, we calculate support separately for each curvature class and keep the largest score.
+This avoids combining evidence for incompatible curve shapes.
+ The output therefore contains local curve directions across the strand’s width rather than a single thin centerline.
 
-Compatibility matrices and curvature-bin memberships are precomputed for each
-offset. Neighbor orientations are accumulated with matrix operations, and row
-tiles bound intermediate memory use. Support neighborhoods are clipped at image
-boundaries, with neither wraparound nor self-support. Boundary pixels therefore
-have fewer possible supporting neighbors than interior pixels.
+The compatibility scores and curvature-class memberships for each relative neighbor position are pre-computed.
+Matrix operations combine the neighbors’ orientation scores, while processing blocks of rows limits temporary memory use.
+At image edges, we ignore neighboring positions that fall outside the image.
+Pixels cannot receive support from themselves or from the opposite image edge, so boundary pixels have fewer available supporting neighbors than interior pixels.
 
 \subsection{Support results}
 \begin{figure}[!htbp]
@@ -292,11 +290,23 @@ is at most $10^{-4}$. All three images reached the five-update limit.
 
 \begin{figure}[!htbp]
 \centering
-\asset{0.32}{spaghetti_relaxation.png}\hfill
-\asset{0.32}{fingerprint_relaxation.png}\hfill
-\asset{0.32}{hair_relaxation.png}
-\caption{Initial and five-update estimates for spaghetti, fingerprint, and hair. Initial and final display thresholds are 0.20 and 0.50, respectively.}
+\asset{1.0}{spaghetti_relaxation.png}
+\caption{Spaghetti tangent estimates before relaxation (left, $p>0.20$) and after five updates (right, $p>0.50$).}
 \label{fig:relaxation}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\asset{1.0}{fingerprint_relaxation.png}
+\caption{Fingerprint tangent estimates before relaxation (left, $p>0.20$) and after five updates (right, $p>0.50$).}
+\label{fig:fingerprint-relaxation}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\asset{1.0}{hair_relaxation.png}
+\caption{Hair tangent estimates before relaxation (left, $p>0.20$) and after five updates (right, $p>0.50$).}
+\label{fig:hair-relaxation}
 \end{figure}
 
 \begin{table}[!htbp]
@@ -306,8 +316,8 @@ is at most $10^{-4}$. All three images reached the five-update limit.
 \end{table}
 
 \begin{figure}[!htbp]
-\centering\asset{0.90}{support_history.png}
-\caption{Support per pixel and maximum confidence change, with legend order spaghetti, fingerprint, and hair. No run reaches the stopping tolerance.}
+\centering\asset{0.65}{support_history.png}
+\caption{Average local support per pixel over five updates for spaghetti, fingerprint, and hair.}
 \label{fig:history}
 \end{figure}
 
@@ -318,13 +328,13 @@ rises to 2.270 by update five. Fingerprint falls slightly from 1.391 to 1.363,
 then reaches 5.192. Hair increases from 1.610 to 7.005. The final scores are
 approximately 2.16, 3.73, and 4.35 times their initial values, respectively.
 
-The first decreases show why a monotonic-improvement claim is inappropriate
-here. The maximum over curvature classes and the changing winning classes make
-the effective compatibility depend on the current state. In addition, independent
-binary labels allow total tangent confidence to grow, so a larger $A(p)$ does
-not by itself establish more accurate curve localization. The maximum changes
-on update five are still 0.510, 0.505, and 0.433. These values indicate substantial
-remaining movement, rather than convergence to a fixed labeling.
+\begin{samepage}
+Five updates give substantially higher support than initialization
+(Figure~\ref{fig:history}) and clearer tangent tracks in the displayed results.
+We use five as a practical limit for this report. Support is still rising, so
+the plot does not establish convergence or an optimal stopping point.
+Higher support alone does not prove more accurate curve localization.
+\end{samepage}
 
 \subsection{Local behavior}
 \begin{figure}[!htbp]

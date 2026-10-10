@@ -192,24 +192,19 @@ def synthetic_crossing():
 
 
 def summary_figures(metrics):
-    fig, axes = plt.subplots(1, 2, figsize=(10, 3.5), layout="constrained")
+    fig, ax = plt.subplots(figsize=(6, 3.5), layout="constrained")
     with (ASSETS / "support_history.csv").open("w", newline="") as file:
         writer = csv.writer(file)
         writer.writerow(["image", "iteration", "A_p", "A_p_per_pixel", "max_confidence_change"])
         for m in metrics:
             values = m["average_local_support_per_pixel"]
-            axes[0].plot(range(len(values)), values, marker="o", label=m["image"])
-            axes[1].plot(range(1, len(values)), m["max_confidence_changes"],
-                         marker="o", label=m["image"])
+            ax.plot(range(len(values)), values, marker="o", label=m["image"])
             for i, (raw, average) in enumerate(zip(m["average_local_support"], values)):
                 writer.writerow([m["image"], i, raw, average,
                                  m["max_confidence_changes"][i - 1] if i else ""])
-    for ax in axes:
-        ax.set_xlabel("Iteration")
-        ax.grid(alpha=0.2)
-        ax.legend()
-    axes[0].set(ylabel="A(p) / number of pixels", title="Average local support")
-    axes[1].set(ylabel="Maximum absolute confidence change", title="Update size")
+    ax.set(xlabel="Iteration", ylabel="A(p) / number of pixels", title="Average local support")
+    ax.grid(alpha=0.2)
+    ax.legend()
     save(fig, "support_history")
 
     rows = [r"\begin{tabular}{lrrrrr}", r"\toprule",
