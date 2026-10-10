@@ -109,7 +109,7 @@ Spaghetti retains clear tangent tracks along most strands, while fingerprint
 and hair become sparser, with gaps where no orientation exceeds the higher threshold.
 Since the initial probabilities sum to one at each pixel, $p>0.50$ permits at
 most one displayed orientation per sampled pixel, although a high confidence
-alone does not establish that its direction is correct.
+alone does not establish that its direction is correct. Thus, the latter value is used.
 
 Spaghetti already has recognizable tangents, but crossings and endpoints
 produce fans of conflicting directions. The negative central lobe also makes
@@ -119,37 +119,70 @@ denser conflicting estimates. In the fingerprint crop, ridge-aligned vertical
 vectors coexist with transverse vectors. In hair, many vectors follow the
 prevailing diagonal direction, but other directions appear across the strands.
 
-There are 8,685, 14,319, and 17,979 displayed initial vectors for spaghetti,
-fingerprint, and hair. These are counts of orientation hypotheses sampled on a
-grid, not counts of curve pixels. Several vectors can occur at one sampled pixel.
-Softmax also assigns mass in uninformative areas, so local agreement is needed
-to distinguish a coherent tangent from a relative response maximum.
-
 \section{Part II: cocircularity and curvature consistency}
 \subsection{Cocircularity compatibility}
-Let $\mathbf d_{ij}=(d_x,d_y)$ join pixel $i$ to pixel $j$, let
-$d=\|\mathbf d_{ij}\|$, and let $\beta_{ij}=\operatorname{atan2}(d_y,d_x)\bmod\pi$.
-Define $W(a)$ as the signed axial angle difference wrapped into
-$[-\pi/2,\pi/2]$. Tangents compatible with the same circle have approximately
-opposite interior angles relative to this chord. The discrete test is
+Following Parent and Zucker~\cite{parent1989}, two unit tangents $\lambda$ and
+$\lambda'$ are cocircular when a circle is tangent to both at their respective
+positions. Collinear tangents are the limiting case of infinite radius.
+Their orientations are denoted $\theta_\lambda$ and $\theta_{\lambda'}$;
+these are the image-coordinate angles $\phi_\lambda$ and $\phi_{\lambda'}$
+from Part I, rather than the kernel rotation angles.
+
+For pixels $(x_i,y_i)$ and $(x_j,y_j)$, define
 \begin{equation}
-\left|W(\beta_{ij}-\phi_\lambda)+W(\beta_{ij}-\phi_{\lambda'})\right|
-<\epsilon+2\alpha_{ij},\qquad
-\epsilon=\frac{\pi}{16},\quad \alpha_{ij}=\arcsin(1/d).
+\Delta x=x_j-x_i,\qquad \Delta y=y_j-y_i,\qquad
+d_{ij}=\sqrt{\Delta x^2+\Delta y^2},\qquad
+\theta_{ij}=\arctan(\Delta y/\Delta x).
+\end{equation}
+Here $\theta_{ij}$ is the orientation of the line joining the pixels, as in
+the paper's Equation (5.1). The code evaluates it using
+$\operatorname{atan2}(\Delta y,\Delta x)\bmod\pi$ to handle vertical lines.
+The paper's signed interior-angle function is
+\begin{equation}
+\Gamma(\beta,\gamma)=
+\begin{cases}
+\gamma-\beta, & |\gamma-\beta|\leq\pi/2,\\
+\gamma-\beta-\pi, & \pi/2<\gamma-\beta\leq\pi,\\
+\gamma-\beta+\pi, & -\pi\leq\gamma-\beta<-\pi/2.
+\end{cases}
+\end{equation}
+Exact cocircularity requires equal interior angles,
+$\Gamma(\theta_\lambda,\theta_{ij})=
+\Gamma(\theta_{ij},\theta_{\lambda'})$.
+For quantized positions and orientations, the implementation uses the paper's
+discrete condition, Equation (5.5):
+\begin{equation}
+\left|\Gamma(\theta_\lambda,\theta_{ij})-
+\Gamma(\theta_{ij},\theta_{\lambda'})\right|
+<\epsilon+2\alpha,\qquad
+\epsilon=\frac{\pi}{16},\quad \alpha=\arcsin(1/d_{ij}).
 \label{eq:cocircularity}
 \end{equation}
-The distance-dependent tolerance allows for pixel quantization. Integer offsets
-exclude $i=j$, so $d\geq1$. Compatibility is 1 when the test holds and
-$c_{\min}=0.1$ otherwise. Retaining a small incompatible contribution avoids an
-entirely binary orientation decision, but also lets some incorrect hypotheses
-receive weak evidence.
+The term $\epsilon$ allows for orientation discretization, while $2\alpha$
+allows for uncertainty in the joining line when each tangent position varies
+within a radius-$1/2$ pixel circle. Integer offsets exclude $i=j$, so
+$d_{ij}\geq1$.
+
+\textbf{Assumption: simplified cocircularity coefficient.}
+The implementation replaces the gradual falloff in the paper's Figure 9 and
+Equation (5.6) with a step function:
+\begin{equation}
+c_{ij}(\lambda,\lambda')=
+\begin{cases}
+1, & \text{if Equation~\eqref{eq:cocircularity} holds},\\
+c_{\min}=0.1, & \text{otherwise}.
+\end{cases}
+\end{equation}
+Thus, all pairs outside the accepted angular tolerance receive the same weak
+compatibility, regardless of how far they depart from cocircularity.
+The sloping transition regions shown in the paper's figure are not implemented.
 
 \subsection{Curvature classes and support}
 For a candidate tangent $\phi$ at $i$, the signed curvature of the circle through
 $j$ tangent at $i$ is
 \begin{equation}
 \kappa_{ij}(\phi)=
-\frac{2(\cos\phi\,d_y-\sin\phi\,d_x)}{d^2}.
+\frac{2(\cos\phi\,\Delta y-\sin\phi\,\Delta x)}{d_{ij}^2}.
 \label{eq:curvature}
 \end{equation}
 The seven bin edges are
