@@ -1,0 +1,16 @@
+{
+  "radius": 3,
+  "curvature_edges": [
+    -0.05,
+    0.05
+  ],
+  "c_min": 0,
+  "support_min": 1,
+  "support_max": 6,
+  "iterations": 5,
+  "crossing_confidences": [
+    0.9980754412858417,
+    0.9980754412858417
+  ],
+  "isolated_confidence": 0.14874754566549658
+}

@@ -1,0 +1,42 @@
+{
+  "image": "hair",
+  "width": 640,
+  "height": 641,
+  "initial_vectors": 17979,
+  "supported_vectors": 3243,
+  "initial_vectors_p05": 2689,
+  "relaxed_vectors": 16727,
+  "support_display_threshold": 0.61,
+  "iterations_completed": 5,
+  "support_min": 3.0,
+  "support_max": 10.0,
+  "average_local_support": [
+    660653.8068990062,
+    785859.3984585252,
+    1186897.068424067,
+    1735089.5567714742,
+    2307214.4482443193,
+    2873675.1166667263
+  ],
+  "average_local_support_per_pixel": [
+    1.6104080706391533,
+    1.915608908098979,
+    2.8931773313769185,
+    4.229449972629373,
+    5.624060180002728,
+    7.004863291406801
+  ],
+  "max_confidence_changes": [
+    0.46334948620509375,
+    0.4392692530579609,
+    0.4161699225306076,
+    0.44200482428821253,
+    0.43272395637477223
+  ],
+  "central_crop_xyxy": [
+    256,
+    256,
+    384,
+    384
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "image": "spaghetti",
+  "width": 1200,
+  "height": 825,
+  "initial_vectors": 8685,
+  "supported_vectors": 6231,
+  "initial_vectors_p05": 2794,
+  "relaxed_vectors": 12560,
+  "support_display_threshold": 0.18,
+  "iterations_completed": 5,
+  "support_min": 3.0,
+  "support_max": 10.0,
+  "average_local_support": [
+    1038321.8911238024,
+    812023.0436489073,
+    947754.3958412043,
+    1342378.904234121,
+    1803755.9847154943,
+    2247104.2455682927
+  ],
+  "average_local_support_per_pixel": [
+    1.0488099910341437,
+    0.8202252966150579,
+    0.957327672566873,
+    1.3559382871051728,
+    1.821975742136863,
+    2.2698022682508006
+  ],
+  "max_confidence_changes": [
+    0.5384288861736172,
+    0.5212883059543373,
+    0.4592603064705151,
+    0.4966240339266542,
+    0.5102050682591568
+  ],
+  "central_crop_xyxy": [
+    536,
+    348,
+    664,
+    476
+  ]
+}

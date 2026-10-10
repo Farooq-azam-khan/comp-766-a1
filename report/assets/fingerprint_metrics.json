@@ -1,0 +1,42 @@
+{
+  "image": "fingerprint",
+  "width": 512,
+  "height": 513,
+  "initial_vectors": 14319,
+  "supported_vectors": 2213,
+  "initial_vectors_p05": 790,
+  "relaxed_vectors": 8266,
+  "support_display_threshold": 0.44,
+  "iterations_completed": 5,
+  "support_min": 3.0,
+  "support_max": 10.0,
+  "average_local_support": [
+    365392.45339395246,
+    358102.90429169015,
+    495097.8875699631,
+    755453.6743986859,
+    1059760.3842763393,
+    1363655.193119959
+  ],
+  "average_local_support_per_pixel": [
+    1.3911445137135738,
+    1.3633912961885133,
+    1.8849669817935364,
+    2.876209469415075,
+    4.0347846014419595,
+    5.191791518640195
+  ],
+  "max_confidence_changes": [
+    0.3841958334771518,
+    0.42701682639309657,
+    0.4260701585832434,
+    0.428256916450495,
+    0.5052979316323
+  ],
+  "central_crop_xyxy": [
+    192,
+    192,
+    320,
+    320
+  ]
+}
