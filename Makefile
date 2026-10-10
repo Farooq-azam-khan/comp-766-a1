@@ -3,7 +3,6 @@
 ZIP := comp766_a1_submission.zip
 SUBMISSION := \
 	report/main.pdf \
-	report/generate_assets.py \
 	src/convolution.py \
 	src/support_generation.py \
 	src/relaxation_labeling.py \
